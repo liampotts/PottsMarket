@@ -195,7 +195,18 @@ def trade_market(request, slug):
         outcome.refresh_from_db()
 
     try:
+        # Check Balance
+        if user.userprofile.balance < amount:
+             return JsonResponse({'error': 'Insufficient funds.'}, status=400)
+
         result = CPMMService.buy_tokens(user, outcome, amount)
+        
+        # Deduct Balance (Atomic with buy_tokens would be better, but doing here for now)
+        # Note: CPMMService.buy_tokens is atomic, but this deduction is outside it.
+        # Ideally we move this into CPMMService.
+        user.userprofile.balance -= amount
+        user.userprofile.save()
+        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -268,7 +279,11 @@ def redeem_shares(request, slug):
         position.shares = Decimal('0')
         position.save()
         
-        return JsonResponse({'status': 'redeemed', 'payout': payout, 'shares_burned': float(shares)})
+        # Credit Balance
+        user.userprofile.balance += Decimal(str(payout))
+        user.userprofile.save()
+        
+        return JsonResponse({'status': 'redeemed', 'payout': payout, 'shares_burned': float(shares), 'new_balance': float(user.userprofile.balance)})
         
     except Position.DoesNotExist:
         return JsonResponse({'message': 'No position in winning outcome.', 'payout': 0})
@@ -335,5 +350,6 @@ def user_portfolio(request):
         'positions': positions_data,
         'created_markets': markets_data,
         'total_value': total_value,
-        'username': user.username
+        'username': user.username,
+        'balance': float(user.userprofile.balance)
     })

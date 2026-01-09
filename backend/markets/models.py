@@ -51,3 +51,24 @@ class Position(models.Model):
         return f"{self.user.username} - {self.shares} shares of {self.outcome}"
 
 # Create your models here.
+
+class UserProfile(models.Model):
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE)
+    balance = models.DecimalField(max_digits=20, decimal_places=2, default=1000.00)
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile ($ {self.balance})"
+
+# Signals to auto-create UserProfile
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.userprofile.save()

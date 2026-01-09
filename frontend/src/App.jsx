@@ -87,6 +87,9 @@ function Navbar({ onOpenAuth, setView }) {
         {user ? (
           <>
             <button className="text-btn" onClick={() => setView('dashboard')}>Dashboard</button>
+            <span className="navbar-balance" style={{ marginRight: '1rem', fontWeight: 'bold' }}>
+              ${user.balance !== undefined ? user.balance.toFixed(2) : '...'}
+            </span>
             <span className="navbar-user">Hello, {user.username}</span>
             <button className="btn-secondary" onClick={logout}>Logout</button>
           </>
@@ -100,7 +103,7 @@ function Navbar({ onOpenAuth, setView }) {
 
 function MainApp() {
   const apiBase = '/api'
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const [markets, setMarkets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -147,6 +150,7 @@ function MainApp() {
 
     // Refresh markets to update prices
     fetchMarkets()
+    refreshUser() // Update balance
     return data
   }
   const handleResolve = async (slug, outcomeId) => {
@@ -180,6 +184,7 @@ function MainApp() {
         alert(data.message || 'No winnings to redeem.')
       }
       fetchMarkets()
+      refreshUser() // Update balance
     } catch (err) {
       alert(err.message)
     }

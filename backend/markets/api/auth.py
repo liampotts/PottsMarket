@@ -20,7 +20,8 @@ def login_view(request):
             return JsonResponse({
                 'id': user.id,
                 'username': user.username,
-                'email': user.email
+                'email': user.email,
+                'balance': float(user.userprofile.balance)
             })
         else:
             return JsonResponse({'error': 'Invalid credentials'}, status=401)
@@ -66,5 +67,6 @@ def me_view(request):
     return JsonResponse({
         'id': request.user.id,
         'username': request.user.username,
-        'email': request.user.email
+        'email': request.user.email,
+        'balance': float(request.user.userprofile.balance)
     })
