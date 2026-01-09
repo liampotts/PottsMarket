@@ -26,4 +26,26 @@ class Market(models.Model):
     def __str__(self) -> str:
         return self.title
 
+
+class Outcome(models.Model):
+    market = models.ForeignKey(Market, related_name='outcomes', on_delete=models.CASCADE)
+    name = models.CharField(max_length=50)  # e.g., "YES", "NO"
+    current_price = models.DecimalField(max_digits=5, decimal_places=4, default=0.50)
+    pool_balance = models.DecimalField(max_digits=20, decimal_places=4, default=0.0)  # Liquidity pool balance
+
+    def __str__(self) -> str:
+        return f"{self.market.title} - {self.name}"
+
+
+class Position(models.Model):
+    user = models.ForeignKey('auth.User', related_name='positions', on_delete=models.CASCADE)
+    outcome = models.ForeignKey(Outcome, related_name='positions', on_delete=models.CASCADE)
+    shares = models.DecimalField(max_digits=20, decimal_places=4, default=0.0)
+
+    class Meta:
+        unique_together = ('user', 'outcome')
+
+    def __str__(self) -> str:
+        return f"{self.user.username} - {self.shares} shares of {self.outcome}"
+
 # Create your models here.

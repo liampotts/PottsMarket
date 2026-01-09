@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -81,4 +82,70 @@ def market_detail(request, slug):
     }
     return JsonResponse(payload)
 
-# Create your views here.
+from .services import CPMMService
+from django.contrib.auth.models import User  # For demo, using first user or auth
+
+@csrf_exempt
+def trade_market(request, slug):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    market = get_object_or_404(Market, slug=slug)
+    
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    # For MVP DEMO: We will just assume User ID 1 exists or create a temp user
+    # IN REAL APP: Use request.user and @login_required
+    user_id = payload.get('user_id')
+    if not user_id:
+        # Auto-create a test user if none exists for easy testing
+        user, _ = User.objects.get_or_create(username='test_trader')
+    else:
+        user = get_object_or_404(User, pk=user_id)
+
+    outcome_id = payload.get('outcome_id')
+    amount = payload.get('amount')
+
+    if not outcome_id or not amount:
+        return JsonResponse({'error': 'outcome_id and amount are required.'}, status=400)
+
+    try:
+        amount = Decimal(str(amount))
+        if amount <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid amount.'}, status=400)
+
+    try:
+        outcome = market.outcomes.get(pk=outcome_id)
+    except Outcome.DoesNotExist:
+         return JsonResponse({'error': 'Outcome not found.'}, status=404)
+
+    # Initialize market if needed (ensure pools exist)
+    if outcome.pool_balance == 0:
+        CPMMService.initialize_market(market)
+        outcome.refresh_from_db()
+
+    try:
+        result = CPMMService.buy_tokens(user, outcome, amount)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({
+        'status': 'success',
+        'trade': result,
+        'market_status': {
+            'outcomes': [
+                {
+                    'id': o.id,
+                    'name': o.name,
+                    'price': o.current_price,
+                    'pool': o.pool_balance
+                } for o in market.outcomes.all()
+            ]
+        }
+    })
+
