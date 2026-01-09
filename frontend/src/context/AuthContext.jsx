@@ -6,13 +6,15 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const apiBase = import.meta.env.VITE_API_URL || '/api';
+
     useEffect(() => {
         checkUserLoggedIn();
     }, []);
 
     const checkUserLoggedIn = async () => {
         try {
-            const res = await fetch('/api/auth/me/');
+            const res = await fetch(`${apiBase}/auth/me/`);
             if (res.ok) {
                 const data = await res.json();
                 setUser(data);
@@ -28,7 +30,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (username, password) => {
-        const res = await fetch('/api/auth/login/', {
+        const res = await fetch(`${apiBase}/auth/login/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
@@ -43,7 +45,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const signup = async (username, email, password) => {
-        const res = await fetch('/api/auth/signup/', {
+        const res = await fetch(`${apiBase}/auth/signup/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password }),
@@ -58,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
-        await fetch('/api/auth/logout/', { method: 'POST' });
+        await fetch(`${apiBase}/auth/logout/`, { method: 'POST' });
         setUser(null);
     };
 
