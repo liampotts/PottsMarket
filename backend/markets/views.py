@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import Market
+from .services import CPMMService
 
 
 @csrf_exempt
@@ -42,6 +43,9 @@ def market_list(request):
             status=status,
         )
 
+        # Auto-initialize 50/50 outcomes
+        CPMMService.initialize_market(market)
+
         response_payload = {
             'id': market.id,
             'title': market.title,
@@ -49,6 +53,15 @@ def market_list(request):
             'description': market.description,
             'status': market.status,
             'created_at': market.created_at.isoformat(),
+            'outcomes': [
+                {
+                    'id': o.id,
+                    'name': o.name,
+                    'price': o.current_price,
+                    'pool': o.pool_balance,
+                }
+                for o in market.outcomes.all()
+            ]
         }
         return JsonResponse(response_payload, status=201)
 

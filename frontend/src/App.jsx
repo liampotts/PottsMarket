@@ -137,7 +137,7 @@ function App() {
     setCreating(true)
     setCreateError('')
     try {
-      const response = await fetch(`${apiBase}/api/markets/`, {
+      const response = await fetch(`${apiBase}/markets/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
