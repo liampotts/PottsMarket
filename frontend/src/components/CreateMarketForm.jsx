@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 
-export default function CreateMarketForm({ onMarketCreated }) {
+export default function CreateMarketForm({ onMarketCreated, initialData = null, onCancel = null }) {
     const apiBase = '/api';
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState('');
 
-    const [form, setForm] = useState({
+    const [form, setForm] = useState(initialData || {
         title: '',
         slug: '',
         description: '',
@@ -18,32 +18,37 @@ export default function CreateMarketForm({ onMarketCreated }) {
     };
 
     const handleSubmit = async (event) => {
-        event.preventDefault();
-        setCreating(true);
-        setCreateError('');
+        event.preventDefault()
+        setCreating(true)
+        setCreateError('')
         try {
-            const response = await fetch(`${apiBase}/markets/`, {
-                method: 'POST',
+            const url = initialData ? `${apiBase}/markets/${initialData.slug}/` : `${apiBase}/markets/`
+            const method = initialData ? 'PUT' : 'POST'
+
+            const response = await fetch(url, {
+                method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
-            });
-            const data = await response.json();
+            })
+            const data = await response.json()
             if (!response.ok) {
                 const message =
                     data?.errors
                         ? Object.values(data.errors).join(' ')
-                        : data?.error || 'Failed to create market.';
-                throw new Error(message);
+                        : data?.error || 'Failed to save market.'
+                throw new Error(message)
             }
-
-            onMarketCreated(data);
-            setForm({ title: '', slug: '', description: '', status: 'draft' });
+            onMarketCreated(data)
+            // Reset only if creating new
+            if (!initialData) {
+                setForm({ title: '', slug: '', description: '', status: 'draft' })
+            }
         } catch (err) {
-            setCreateError(err.message || 'Unable to create market.');
+            setCreateError(err.message || 'Unable to save market.')
         } finally {
-            setCreating(false);
+            setCreating(false)
         }
-    };
+    }
 
     return (
         <form className="form" onSubmit={handleSubmit}>
@@ -86,9 +91,16 @@ export default function CreateMarketForm({ onMarketCreated }) {
             {createError ? (
                 <div className="status error">{createError}</div>
             ) : null}
-            <button className="primary" type="submit" disabled={creating}>
-                {creating ? 'Creating...' : 'Create market'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                <button className="primary" type="submit" disabled={creating}>
+                    {creating ? 'Saving...' : (initialData ? 'Update Market' : 'Create Market')}
+                </button>
+                {onCancel && (
+                    <button className="ghost" type="button" onClick={onCancel}>
+                        Cancel
+                    </button>
+                )}
+            </div>
         </form>
     );
 }

@@ -106,6 +106,7 @@ function MainApp() {
 
   // Auth Modal State
   const [authModalType, setAuthModalType] = useState(null); // 'login' or 'signup'
+  const [editingMarket, setEditingMarket] = useState(null);
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -180,6 +181,24 @@ function MainApp() {
       alert(err.message)
     }
   }
+
+  const handleDelete = async (slug) => {
+    if (!confirm('Are you sure you want to delete this market? This action cannot be undone.')) return;
+
+    try {
+      const response = await fetch(`${apiBase}/markets/${slug}/delete/`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete market');
+      }
+      alert('Market deleted.');
+      fetchMarkets();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const handleAuthSuccess = () => {
     setAuthModalType(null);
@@ -265,12 +284,42 @@ function MainApp() {
                     {market.status === 'resolved' && (
                       <button className="primary sm" onClick={() => handleRedeem(market.slug)}>Redeem Winnings</button>
                     )}
+
+                    {user && market.created_by === user.username && (
+                      <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                        {market.status === 'draft' && (
+                          <button className="primary sm" onClick={() => {
+                            if (confirm('Publish this market? It will be open for trading.')) {
+                              // Quick publish action reusing the update endpoint
+                              fetch(`${apiBase}/markets/${market.slug}/`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ...market, status: 'open' })
+                              })
+                                .then(res => {
+                                  if (res.ok) {
+                                    alert('Market published!');
+                                    fetchMarkets();
+                                  } else {
+                                    alert('Failed to publish.');
+                                  }
+                                })
+                            }
+                          }}>Publish</button>
+                        )}
+                        <button className="text-btn" onClick={() => setEditingMarket(market)}>Edit</button>
+                        <button className="text-btn delete-btn" onClick={() => handleDelete(market.slug)} style={{ color: 'red' }}>
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}
             </div>
           )}
         </section>
+
 
         {activeTradeMarket && (
           <TradeModal
@@ -280,33 +329,57 @@ function MainApp() {
           />
         )}
 
-        {/* Auth Modal */}
-        {authModalType && (
-          <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
-            <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
+        {/* Edit Market Modal */}
+        {editingMarket && (
+          <div className="modal-overlay">
+            <div className="modal">
               <div className="modal-header">
-                <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
-                <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
+                <h3>Edit Market</h3>
+                <button className="ghost sm" onClick={() => setEditingMarket(null)}>✕</button>
               </div>
-
-              {authModalType === 'login' ? (
-                <>
-                  <LoginPage onLoginSuccess={handleAuthSuccess} />
-                  <p className="auth-switch">
-                    Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
-                  </p>
-                </>
-              ) : (
-                <>
-                  <SignupPage onSignupSuccess={handleAuthSuccess} />
-                  <p className="auth-switch">
-                    Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
-                  </p>
-                </>
-              )}
+              <CreateMarketForm
+                initialData={editingMarket}
+                onCancel={() => setEditingMarket(null)}
+                onMarketCreated={(updatedMarket) => {
+                  // Update local state
+                  setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
+                  setEditingMarket(null);
+                  alert('Market updated!');
+                }}
+              />
             </div>
           </div>
         )}
+
+        {/* Auth Modal */}
+        {
+          authModalType && (
+            <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
+              <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
+                  <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
+                </div>
+
+                {authModalType === 'login' ? (
+                  <>
+                    <LoginPage onLoginSuccess={handleAuthSuccess} />
+                    <p className="auth-switch">
+                      Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <SignupPage onSignupSuccess={handleAuthSuccess} />
+                    <p className="auth-switch">
+                      Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        }
 
         <section className="panel panel--accent">
           <div className="panel__header">
@@ -328,12 +401,12 @@ function MainApp() {
             </div>
           )}
         </section>
-      </main>
+      </main >
 
       <footer className="footer">
         <span>Built for fast signals and sharper predictions.</span>
       </footer>
-    </div>
+    </div >
   )
 }
 

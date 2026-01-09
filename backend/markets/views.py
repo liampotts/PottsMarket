@@ -97,8 +97,40 @@ def market_list(request):
     return JsonResponse(payload, safe=False)
 
 
+@csrf_exempt
 def market_detail(request, slug):
     market = get_object_or_404(Market, slug=slug)
+
+    if request.method in ['PUT', 'PATCH']:
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required.'}, status=401)
+        
+        if market.created_by != request.user:
+            return JsonResponse({'error': 'Permission denied.'}, status=403)
+
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+        market.title = payload.get('title', market.title)
+        market.description = payload.get('description', market.description)
+        market.status = payload.get('status', market.status)
+        
+        # If slug is updated, we need to handle it carefully or disallow it.
+        # For simplicity, we'll allow it but check uniqueness if changed.
+        new_slug = payload.get('slug')
+        if new_slug and new_slug != market.slug:
+             if Market.objects.filter(slug=new_slug).exists():
+                 return JsonResponse({'error': 'Slug already exists.'}, status=400)
+             market.slug = new_slug
+
+        market.save()
+        # Fall through to return updated object
+
+    if request.method not in ['GET', 'PUT', 'PATCH']:
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
     payload = {
         'id': market.id,
         'title': market.title,
@@ -241,3 +273,19 @@ def redeem_shares(request, slug):
     except Position.DoesNotExist:
         return JsonResponse({'message': 'No position in winning outcome.', 'payout': 0})
 
+
+@csrf_exempt
+def delete_market(request, slug):
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+
+    market = get_object_or_404(Market, slug=slug)
+
+    if market.created_by != request.user:
+        return JsonResponse({'error': 'Permission denied. You are not the owner.'}, status=403)
+
+    market.delete()
+    return JsonResponse({'message': 'Market deleted successfully.'}, status=200)
