@@ -10,6 +10,7 @@ urlpatterns = [
     path('markets/<slug:slug>/resolve/', views.resolve_market, name='resolve_market'),
     path('markets/<slug:slug>/redeem/', views.redeem_shares, name='redeem_shares'),
     path('markets/<slug:slug>/delete/', views.delete_market, name='delete_market'),
+    path('portfolio/', views.user_portfolio, name='user_portfolio'),
     
     # Auth Endpoints
     path('auth/login/', auth.login_view, name='login'),

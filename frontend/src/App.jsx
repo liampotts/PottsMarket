@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import CreateMarketForm from './components/CreateMarketForm'
+import Dashboard from './pages/Dashboard'
 
 // Simple modal for trading
 function TradeModal({ market, onClose, onTrade }) {
@@ -76,15 +77,16 @@ function TradeModal({ market, onClose, onTrade }) {
   )
 }
 
-function Navbar({ onOpenAuth }) {
+function Navbar({ onOpenAuth, setView }) {
   const { user, logout } = useAuth();
 
   return (
     <nav className="navbar">
-      <div className="navbar-brand">PottsMarket</div>
+      <div className="navbar-brand" onClick={() => setView('feed')} style={{ cursor: 'pointer' }}>PottsMarket</div>
       <div className="navbar-actions">
         {user ? (
           <>
+            <button className="text-btn" onClick={() => setView('dashboard')}>Dashboard</button>
             <span className="navbar-user">Hello, {user.username}</span>
             <button className="btn-secondary" onClick={logout}>Logout</button>
           </>
@@ -107,6 +109,7 @@ function MainApp() {
   // Auth Modal State
   const [authModalType, setAuthModalType] = useState(null); // 'login' or 'signup'
   const [editingMarket, setEditingMarket] = useState(null);
+  const [currentView, setCurrentView] = useState('feed'); // 'feed' | 'dashboard'
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -206,7 +209,7 @@ function MainApp() {
 
   return (
     <div className="page">
-      <Navbar onOpenAuth={setAuthModalType} />
+      <Navbar onOpenAuth={setAuthModalType} setView={setCurrentView} />
 
       <header className="hero">
         <div className="hero__content">
@@ -220,188 +223,198 @@ function MainApp() {
       </header>
 
       <main className="grid">
-        <section className="panel">
-          <div className="panel__header">
-            <div>
-              <h2>Markets</h2>
-              <p>Live markets from the backend API.</p>
-            </div>
-            <button className="ghost" onClick={fetchMarkets}>
-              Refresh
-            </button>
-          </div>
-          {loading ? (
-            <div className="status">Loading markets...</div>
-          ) : error ? (
-            <div className="status error">{error}</div>
-          ) : markets.length === 0 ? (
-            <div className="status empty">
-              No markets yet. Create one to get started.
-            </div>
-          ) : (
-            <div className="market-list">
-              {markets.map((market) => (
-                <article className="market-card" key={market.id}>
-                  <div className="market-card__top">
-                    <h3>{market.title}</h3>
-                    <div className="badges">
-                      <span className={`pill pill--${market.status}`}>{market.status}</span>
-                    </div>
-                  </div>
-                  <p>{market.description || 'No description provided.'}</p>
-
-                  {market.outcomes && market.outcomes.length > 0 && (
-                    <div className="outcomes-grid">
-                      {market.outcomes.map(outcome => (
-                        <div key={outcome.id} className="outcome-row">
-                          <span className="outcome-name">{outcome.name}</span>
-                          <span className="outcome-price">{Number(outcome.price || 0).toFixed(2)}</span>
-
-                          {/* Admin Resolve Action (Simulated) */}
-                          {market.status !== 'resolved' && (
-                            <button className="text-btn" onClick={() => {
-                              if (confirm(`Resolve this market as ${outcome.name} WON?`)) {
-                                handleResolve(market.slug, outcome.id)
-                              }
-                            }}>🏆 Win</button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="market-card__actions">
-                    {market.status === 'open' && (
-                      <button className="secondary sm" onClick={() => {
-                        if (user) {
-                          setActiveTradeMarket(market);
-                        } else {
-                          setAuthModalType('login');
-                        }
-                      }}>Trade</button>
-                    )}
-
-                    {market.status === 'resolved' && (
-                      <button className="primary sm" onClick={() => handleRedeem(market.slug)}>Redeem Winnings</button>
-                    )}
-
-                    {user && market.created_by === user.username && (
-                      <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                        {market.status === 'draft' && (
-                          <button className="primary sm" onClick={() => {
-                            if (confirm('Publish this market? It will be open for trading.')) {
-                              // Quick publish action reusing the update endpoint
-                              fetch(`${apiBase}/markets/${market.slug}/`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ ...market, status: 'open' })
-                              })
-                                .then(res => {
-                                  if (res.ok) {
-                                    alert('Market published!');
-                                    fetchMarkets();
-                                  } else {
-                                    alert('Failed to publish.');
-                                  }
-                                })
-                            }
-                          }}>Publish</button>
-                        )}
-                        <button className="text-btn" onClick={() => setEditingMarket(market)}>Edit</button>
-                        <button className="text-btn delete-btn" onClick={() => handleDelete(market.slug)} style={{ color: 'red' }}>
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-
-        {activeTradeMarket && (
-          <TradeModal
-            market={activeTradeMarket}
-            onClose={() => setActiveTradeMarket(null)}
-            onTrade={handleTradeSubmit}
-          />
-        )}
-
-        {/* Edit Market Modal */}
-        {editingMarket && (
-          <div className="modal-overlay">
-            <div className="modal">
-              <div className="modal-header">
-                <h3>Edit Market</h3>
-                <button className="ghost sm" onClick={() => setEditingMarket(null)}>✕</button>
-              </div>
-              <CreateMarketForm
-                initialData={editingMarket}
-                onCancel={() => setEditingMarket(null)}
-                onMarketCreated={(updatedMarket) => {
-                  // Update local state
-                  setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
-                  setEditingMarket(null);
-                  alert('Market updated!');
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Auth Modal */}
-        {
-          authModalType && (
-            <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
-              <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
-                  <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
+        {currentView === 'dashboard' ? (
+          <Dashboard user={user} onEditMarket={(market) => {
+            setEditingMarket(market);
+            // Optionally switch back to feed if we want them to see the list?
+            // Or handle edit modal here. Logic below handles edit modal globally if editingMarket is set.
+          }} />
+        ) : (
+          <>
+            <section className="panel">
+              <div className="panel__header">
+                <div>
+                  <h2>Markets</h2>
+                  <p>Live markets from the backend API.</p>
                 </div>
-
-                {authModalType === 'login' ? (
-                  <>
-                    <LoginPage onLoginSuccess={handleAuthSuccess} />
-                    <p className="auth-switch">
-                      Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <SignupPage onSignupSuccess={handleAuthSuccess} />
-                    <p className="auth-switch">
-                      Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
-                    </p>
-                  </>
-                )}
+                <button className="ghost" onClick={fetchMarkets}>
+                  Refresh
+                </button>
               </div>
-            </div>
-          )
-        }
+              {loading ? (
+                <div className="status">Loading markets...</div>
+              ) : error ? (
+                <div className="status error">{error}</div>
+              ) : markets.length === 0 ? (
+                <div className="status empty">
+                  No markets yet. Create one to get started.
+                </div>
+              ) : (
+                <div className="market-list">
+                  {markets.map((market) => (
+                    <article className="market-card" key={market.id}>
+                      <div className="market-card__top">
+                        <h3>{market.title}</h3>
+                        <div className="badges">
+                          <span className={`pill pill--${market.status}`}>{market.status}</span>
+                        </div>
+                      </div>
+                      <p>{market.description || 'No description provided.'}</p>
 
-        <section className="panel panel--accent">
-          <div className="panel__header">
-            <div>
-              <h2>Create a market</h2>
-              <p>Post to `api/markets/` to spin up a new idea.</p>
-            </div>
-          </div>
+                      {market.outcomes && market.outcomes.length > 0 && (
+                        <div className="outcomes-grid">
+                          {market.outcomes.map(outcome => (
+                            <div key={outcome.id} className="outcome-row">
+                              <span className="outcome-name">{outcome.name}</span>
+                              <span className="outcome-price">{Number(outcome.price || 0).toFixed(2)}</span>
 
-          {user ? (
-            <CreateMarketForm onMarketCreated={(newMarket) => {
-              setMarkets((prev) => [newMarket, ...prev]);
-              alert('Market created successfully!');
-            }} />
-          ) : (
-            <div className="status">
-              <p>You must be logged in to create a market.</p>
-              <button className="primary sm" onClick={() => setAuthModalType('login')}>Log In</button>
-            </div>
-          )}
-        </section>
-      </main >
+                              {/* Admin Resolve Action (Simulated) */}
+                              {market.status !== 'resolved' && (
+                                <button className="text-btn" onClick={() => {
+                                  if (confirm(`Resolve this market as ${outcome.name} WON?`)) {
+                                    handleResolve(market.slug, outcome.id)
+                                  }
+                                }}>🏆 Win</button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="market-card__actions">
+                        {market.status === 'open' && (
+                          <button className="secondary sm" onClick={() => {
+                            if (user) {
+                              setActiveTradeMarket(market);
+                            } else {
+                              setAuthModalType('login');
+                            }
+                          }}>Trade</button>
+                        )}
+
+                        {market.status === 'resolved' && (
+                          <button className="primary sm" onClick={() => handleRedeem(market.slug)}>Redeem Winnings</button>
+                        )}
+
+                        {user && market.created_by === user.username && (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                            {market.status === 'draft' && (
+                              <button className="primary sm" onClick={() => {
+                                if (confirm('Publish this market? It will be open for trading.')) {
+                                  // Quick publish action reusing the update endpoint
+                                  fetch(`${apiBase}/markets/${market.slug}/`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ ...market, status: 'open' })
+                                  })
+                                    .then(res => {
+                                      if (res.ok) {
+                                        alert('Market published!');
+                                        fetchMarkets();
+                                      } else {
+                                        alert('Failed to publish.');
+                                      }
+                                    })
+                                }
+                              }}>Publish</button>
+                            )}
+                            <button className="text-btn" onClick={() => setEditingMarket(market)}>Edit</button>
+                            <button className="text-btn delete-btn" onClick={() => handleDelete(market.slug)} style={{ color: 'red' }}>
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+
+            {activeTradeMarket && (
+              <TradeModal
+                market={activeTradeMarket}
+                onClose={() => setActiveTradeMarket(null)}
+                onTrade={handleTradeSubmit}
+              />
+            )}
+
+            {/* Edit Market Modal */}
+            {editingMarket && (
+              <div className="modal-overlay">
+                <div className="modal">
+                  <div className="modal-header">
+                    <h3>Edit Market</h3>
+                    <button className="ghost sm" onClick={() => setEditingMarket(null)}>✕</button>
+                  </div>
+                  <CreateMarketForm
+                    initialData={editingMarket}
+                    onCancel={() => setEditingMarket(null)}
+                    onMarketCreated={(updatedMarket) => {
+                      // Update local state
+                      setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
+                      setEditingMarket(null);
+                      alert('Market updated!');
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Auth Modal */}
+            {
+              authModalType && (
+                <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
+                  <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
+                      <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
+                    </div>
+
+                    {authModalType === 'login' ? (
+                      <>
+                        <LoginPage onLoginSuccess={handleAuthSuccess} />
+                        <p className="auth-switch">
+                          Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <SignupPage onSignupSuccess={handleAuthSuccess} />
+                        <p className="auth-switch">
+                          Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            }
+
+            <section className="panel panel--accent">
+              <div className="panel__header">
+                <div>
+                  <h2>Create a market</h2>
+                  <p>Post to `api/markets/` to spin up a new idea.</p>
+                </div>
+              </div>
+
+              {user ? (
+                <CreateMarketForm onMarketCreated={(newMarket) => {
+                  setMarkets((prev) => [newMarket, ...prev]);
+                  alert('Market created successfully!');
+                }} />
+              ) : (
+                <div className="status">
+                  <p>You must be logged in to create a market.</p>
+                  <button className="primary sm" onClick={() => setAuthModalType('login')}>Log In</button>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </main>
 
       <footer className="footer">
         <span>Built for fast signals and sharper predictions.</span>

@@ -289,3 +289,51 @@ def delete_market(request, slug):
 
     market.delete()
     return JsonResponse({'message': 'Market deleted successfully.'}, status=200)
+
+
+def user_portfolio(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+
+    user = request.user
+    
+    # 1. Get Positions
+    positions = Position.objects.filter(user=user).select_related('outcome', 'outcome__market')
+    positions_data = []
+    total_value = Decimal('0.0')
+
+    for pos in positions:
+        # Calculate current value based on outcome price
+        # Value = Shares * Current Price
+        current_value = pos.shares * pos.outcome.current_price
+        total_value += current_value
+        
+        positions_data.append({
+            'id': pos.id,
+            'market_title': pos.outcome.market.title,
+            'market_slug': pos.outcome.market.slug,
+            'outcome_name': pos.outcome.name,
+            'shares': pos.shares,
+            'current_price': pos.outcome.current_price,
+            'value': current_value
+        })
+
+    # 2. Get Created Markets
+    created_markets = Market.objects.filter(created_by=user).order_by('-created_at')
+    markets_data = [
+        {
+            'id': m.id,
+            'title': m.title,
+            'slug': m.slug,
+            'status': m.status,
+            'created_at': m.created_at.isoformat(),
+        }
+        for m in created_markets
+    ]
+
+    return JsonResponse({
+        'positions': positions_data,
+        'created_markets': markets_data,
+        'total_value': total_value,
+        'username': user.username
+    })
