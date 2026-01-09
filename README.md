@@ -35,3 +35,5 @@ cd frontend
 npm install
 npm run dev
 ```
+
+If your backend runs elsewhere, set `VITE_API_BASE` in `frontend/.env`.
