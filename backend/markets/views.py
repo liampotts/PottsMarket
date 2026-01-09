@@ -64,6 +64,15 @@ def market_list(request):
             'description': market.description,
             'status': market.status,
             'created_at': market.created_at.isoformat(),
+            'outcomes': [
+                {
+                    'id': o.id,
+                    'name': o.name,
+                    'price': o.current_price,
+                    'pool': o.pool_balance,
+                }
+                for o in market.outcomes.all()
+            ]
         }
         for market in markets
     ]
@@ -79,6 +88,15 @@ def market_detail(request, slug):
         'description': market.description,
         'status': market.status,
         'created_at': market.created_at.isoformat(),
+        'outcomes': [
+            {
+                'id': o.id,
+                'name': o.name,
+                'price': o.current_price,
+                'pool': o.pool_balance,
+            }
+            for o in market.outcomes.all()
+        ]
     }
     return JsonResponse(payload)
 

@@ -1,19 +1,108 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 
+// Simple modal for trading
+function TradeModal({ market, onClose, onTrade }) {
+  const [outcomeId, setOutcomeId] = useState(market.outcomes[0]?.id || '')
+  const [amount, setAmount] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleTrade = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      await onTrade(market.slug, outcomeId, amount)
+      onClose()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectedOutcome = market.outcomes.find(o => String(o.id) === String(outcomeId))
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal">
+        <div className="modal-header">
+          <h3>Trade: {market.title}</h3>
+          <button className="ghost sm" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleTrade} className="form">
+          <label>
+            Outcome
+            <select value={outcomeId} onChange={e => setOutcomeId(e.target.value)}>
+              {market.outcomes.map(o => (
+                <option key={o.id} value={o.id}>{o.name} (${Number(o.price).toFixed(2)})</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="price-display">
+            Current Price: <strong>{selectedOutcome?.name} = {Number(selectedOutcome?.price || 0).toFixed(2)}</strong>
+          </div>
+
+          <label>
+            Amount (USD)
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              placeholder="10.00"
+              step="0.01"
+              min="0.1"
+              required
+            />
+          </label>
+
+          {error && <div className="status error">{error}</div>}
+
+          <div className="modal-actions">
+            <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary" disabled={loading}>
+              {loading ? 'Buying...' : `Buy ${selectedOutcome?.name}`}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function App() {
-  const apiBase = useMemo(() => {
-    return import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
-  }, [])
+  const apiBase = '/api'
   const [markets, setMarkets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeTradeMarket, setActiveTradeMarket] = useState(null)
+
   const [form, setForm] = useState({
     title: '',
     slug: '',
     description: '',
     status: 'draft',
   })
+
+  const handleTradeSubmit = async (slug, outcomeId, amount) => {
+    const response = await fetch(`${apiBase}/markets/${slug}/trade/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        outcome_id: outcomeId,
+        amount: amount,
+        user_id: 1 // Demo user
+      })
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Trade failed')
+
+    // Refresh markets to update prices
+    fetchMarkets()
+    return data
+  }
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -21,7 +110,7 @@ function App() {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`${apiBase}/api/markets/`)
+      const response = await fetch(`${apiBase}/markets/`)
       if (!response.ok) {
         throw new Error('Failed to load markets.')
       }
@@ -130,22 +219,39 @@ function App() {
                 <article className="market-card" key={market.id}>
                   <div className="market-card__top">
                     <h3>{market.title}</h3>
-                    <span className={`pill pill--${market.status}`}>
-                      {market.status}
-                    </span>
+                    <div className="badges">
+                      <span className={`pill pill--${market.status}`}>{market.status}</span>
+                    </div>
                   </div>
                   <p>{market.description || 'No description provided.'}</p>
-                  <div className="market-card__meta">
-                    <span>{market.slug}</span>
-                    <span>
-                      {new Date(market.created_at).toLocaleDateString()}
-                    </span>
+
+                  {market.outcomes && market.outcomes.length > 0 && (
+                    <div className="outcomes-grid">
+                      {market.outcomes.map(outcome => (
+                        <div key={outcome.id} className="outcome-row">
+                          <span className="outcome-name">{outcome.name}</span>
+                          <span className="outcome-price">{Number(outcome.price || 0).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="market-card__actions">
+                    <button className="secondary sm" onClick={() => setActiveTradeMarket(market)}>Trade</button>
                   </div>
                 </article>
               ))}
             </div>
           )}
         </section>
+
+        {activeTradeMarket && (
+          <TradeModal
+            market={activeTradeMarket}
+            onClose={() => setActiveTradeMarket(null)}
+            onTrade={handleTradeSubmit}
+          />
+        )}
 
         <section className="panel panel--accent">
           <div className="panel__header">
