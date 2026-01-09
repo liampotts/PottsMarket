@@ -5,13 +5,16 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Market
+from .models import Market, Outcome, Position
 from .services import CPMMService
 
 
 @csrf_exempt
 def market_list(request):
     if request.method == 'POST':
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required.'}, status=401)
+
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
         except json.JSONDecodeError:
@@ -41,6 +44,7 @@ def market_list(request):
             slug=slug,
             description=description,
             status=status,
+            created_by=request.user
         )
 
         # Auto-initialize 50/50 outcomes
@@ -53,6 +57,7 @@ def market_list(request):
             'description': market.description,
             'status': market.status,
             'created_at': market.created_at.isoformat(),
+            'created_by': market.created_by.username if market.created_by else None,
             'outcomes': [
                 {
                     'id': o.id,
@@ -101,6 +106,7 @@ def market_detail(request, slug):
         'description': market.description,
         'status': market.status,
         'created_at': market.created_at.isoformat(),
+        'created_by': market.created_by.username if market.created_by else None,
         'outcomes': [
             {
                 'id': o.id,
@@ -128,14 +134,10 @@ def trade_market(request, slug):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
 
-    # For MVP DEMO: We will just assume User ID 1 exists or create a temp user
-    # IN REAL APP: Use request.user and @login_required
-    user_id = payload.get('user_id')
-    if not user_id:
-        # Auto-create a test user if none exists for easy testing
-        user, _ = User.objects.get_or_create(username='test_trader')
-    else:
-        user = get_object_or_404(User, pk=user_id)
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+    
+    user = request.user
 
     outcome_id = payload.get('outcome_id')
     amount = payload.get('amount')
@@ -179,4 +181,63 @@ def trade_market(request, slug):
             ]
         }
     })
+
+
+@csrf_exempt
+def resolve_market(request, slug):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    market = get_object_or_404(Market, slug=slug)
+    
+    # In a real app, check for request.user.is_staff or similar
+    
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+        outcome_id = payload.get('outcome_id')
+        outcome = market.outcomes.get(pk=outcome_id)
+    except (ValueError, TypeError, Outcome.DoesNotExist):
+        return JsonResponse({'error': 'Invalid outcome_id.'}, status=400)
+
+    market.winning_outcome = outcome
+    market.status = Market.STATUS_RESOLVED
+    market.save()
+    
+    return JsonResponse({'status': 'resolved', 'winner': outcome.name})
+
+
+@csrf_exempt
+def redeem_shares(request, slug):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    market = get_object_or_404(Market, slug=slug)
+    if market.status != Market.STATUS_RESOLVED or not market.winning_outcome:
+        return JsonResponse({'error': 'Market is not resolved.'}, status=400)
+
+    payload = json.loads(request.body.decode('utf-8') or '{}')
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+    
+    user = request.user
+
+    # Find position in winning outcome
+    try:
+        position = Position.objects.get(user=user, outcome=market.winning_outcome)
+        shares = position.shares
+        if shares <= 0:
+             return JsonResponse({'message': 'No shares to redeem.', 'payout': 0})
+             
+        # "Redeem" means giving them $1 per share. 
+        # In a real app, we would add to user balance.
+        # Here we just zero out the shares and return the payout amount.
+        payout = float(shares) * 1.00
+        
+        position.shares = Decimal('0')
+        position.save()
+        
+        return JsonResponse({'status': 'redeemed', 'payout': payout, 'shares_burned': float(shares)})
+        
+    except Position.DoesNotExist:
+        return JsonResponse({'message': 'No position in winning outcome.', 'payout': 0})
 

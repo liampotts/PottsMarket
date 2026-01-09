@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import LoginPage from './pages/LoginPage'
+import SignupPage from './pages/SignupPage'
+import CreateMarketForm from './components/CreateMarketForm'
 
 // Simple modal for trading
 function TradeModal({ market, onClose, onTrade }) {
@@ -72,39 +76,36 @@ function TradeModal({ market, onClose, onTrade }) {
   )
 }
 
-function App() {
+function Navbar({ onOpenAuth }) {
+  const { user, logout } = useAuth();
+
+  return (
+    <nav className="navbar">
+      <div className="navbar-brand">PottsMarket</div>
+      <div className="navbar-actions">
+        {user ? (
+          <>
+            <span className="navbar-user">Hello, {user.username}</span>
+            <button className="btn-secondary" onClick={logout}>Logout</button>
+          </>
+        ) : (
+          <button className="btn-primary" onClick={() => onOpenAuth('login')}>Login / Signup</button>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+function MainApp() {
   const apiBase = '/api'
+  const { user } = useAuth()
   const [markets, setMarkets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTradeMarket, setActiveTradeMarket] = useState(null)
 
-  const [form, setForm] = useState({
-    title: '',
-    slug: '',
-    description: '',
-    status: 'draft',
-  })
-
-  const handleTradeSubmit = async (slug, outcomeId, amount) => {
-    const response = await fetch(`${apiBase}/markets/${slug}/trade/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        outcome_id: outcomeId,
-        amount: amount,
-        user_id: 1 // Demo user
-      })
-    })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.error || 'Trade failed')
-
-    // Refresh markets to update prices
-    fetchMarkets()
-    return data
-  }
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState('')
+  // Auth Modal State
+  const [authModalType, setAuthModalType] = useState(null); // 'login' or 'signup'
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -127,40 +128,67 @@ function App() {
     fetchMarkets()
   }, [])
 
-  const handleChange = (event) => {
-    const { name, value } = event.target
-    setForm((prev) => ({ ...prev, [name]: value }))
-  }
+  const handleTradeSubmit = async (slug, outcomeId, amount) => {
+    const response = await fetch(`${apiBase}/markets/${slug}/trade/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        outcome_id: outcomeId,
+        amount: amount,
+        // user_id removed, handled by session
+      })
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Trade failed')
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    setCreating(true)
-    setCreateError('')
+    // Refresh markets to update prices
+    fetchMarkets()
+    return data
+  }
+  const handleResolve = async (slug, outcomeId) => {
     try {
-      const response = await fetch(`${apiBase}/markets/`, {
+      const response = await fetch(`${apiBase}/markets/${slug}/resolve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ outcome_id: outcomeId })
       })
-      const data = await response.json()
-      if (!response.ok) {
-        const message =
-          data?.errors
-            ? Object.values(data.errors).join(' ')
-            : data?.error || 'Failed to create market.'
-        throw new Error(message)
-      }
-      setMarkets((prev) => [data, ...prev])
-      setForm({ title: '', slug: '', description: '', status: 'draft' })
+      if (!response.ok) throw new Error('Failed to resolve')
+      alert('Market resolved!')
+      fetchMarkets()
     } catch (err) {
-      setCreateError(err.message || 'Unable to create market.')
-    } finally {
-      setCreating(false)
+      alert(err.message)
     }
   }
 
+  const handleRedeem = async (slug) => {
+    try {
+      const response = await fetch(`${apiBase}/markets/${slug}/redeem/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}) // User ID inferred from session
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Failed to redeem')
+
+      if (data.payout > 0) {
+        alert(`Redeemed $${data.payout.toFixed(2)}!`)
+      } else {
+        alert(data.message || 'No winnings to redeem.')
+      }
+      fetchMarkets()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleAuthSuccess = () => {
+    setAuthModalType(null);
+  };
+
   return (
     <div className="page">
+      <Navbar onOpenAuth={setAuthModalType} />
+
       <header className="hero">
         <div className="hero__content">
           <div className="badge">Prediction markets</div>
@@ -169,28 +197,6 @@ function App() {
             Launch bold questions, trade conviction, and track the pulse of
             sentiment in real time.
           </p>
-          <div className="hero__actions">
-            <button className="primary">Explore markets</button>
-            <button className="ghost">View leaderboard</button>
-          </div>
-        </div>
-        <div className="hero__card">
-          <div className="hero__card-header">
-            <span>Now trading</span>
-            <span className="pill">Open</span>
-          </div>
-          <h3>Will BTC close above $100k this year?</h3>
-          <div className="hero__price">
-            <div>
-              <span>YES</span>
-              <strong>0.62</strong>
-            </div>
-            <div>
-              <span>NO</span>
-              <strong>0.38</strong>
-            </div>
-          </div>
-          <div className="hero__meta">Volume $2.4m · 12,482 traders</div>
         </div>
       </header>
 
@@ -231,13 +237,34 @@ function App() {
                         <div key={outcome.id} className="outcome-row">
                           <span className="outcome-name">{outcome.name}</span>
                           <span className="outcome-price">{Number(outcome.price || 0).toFixed(2)}</span>
+
+                          {/* Admin Resolve Action (Simulated) */}
+                          {market.status !== 'resolved' && (
+                            <button className="text-btn" onClick={() => {
+                              if (confirm(`Resolve this market as ${outcome.name} WON?`)) {
+                                handleResolve(market.slug, outcome.id)
+                              }
+                            }}>🏆 Win</button>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
 
                   <div className="market-card__actions">
-                    <button className="secondary sm" onClick={() => setActiveTradeMarket(market)}>Trade</button>
+                    {market.status === 'open' && (
+                      <button className="secondary sm" onClick={() => {
+                        if (user) {
+                          setActiveTradeMarket(market);
+                        } else {
+                          setAuthModalType('login');
+                        }
+                      }}>Trade</button>
+                    )}
+
+                    {market.status === 'resolved' && (
+                      <button className="primary sm" onClick={() => handleRedeem(market.slug)}>Redeem Winnings</button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -253,6 +280,34 @@ function App() {
           />
         )}
 
+        {/* Auth Modal */}
+        {authModalType && (
+          <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
+            <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
+                <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
+              </div>
+
+              {authModalType === 'login' ? (
+                <>
+                  <LoginPage onLoginSuccess={handleAuthSuccess} />
+                  <p className="auth-switch">
+                    Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <SignupPage onSignupSuccess={handleAuthSuccess} />
+                  <p className="auth-switch">
+                    Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         <section className="panel panel--accent">
           <div className="panel__header">
             <div>
@@ -260,50 +315,18 @@ function App() {
               <p>Post to `api/markets/` to spin up a new idea.</p>
             </div>
           </div>
-          <form className="form" onSubmit={handleSubmit}>
-            <label>
-              Title
-              <input
-                name="title"
-                value={form.title}
-                onChange={handleChange}
-                placeholder="Will the Lakers win the finals?"
-              />
-            </label>
-            <label>
-              Slug
-              <input
-                name="slug"
-                value={form.slug}
-                onChange={handleChange}
-                placeholder="lakers-finals-2025"
-              />
-            </label>
-            <label>
-              Description
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                placeholder="Short context to help traders decide."
-              />
-            </label>
-            <label>
-              Status
-              <select name="status" value={form.status} onChange={handleChange}>
-                <option value="draft">Draft</option>
-                <option value="open">Open</option>
-                <option value="closed">Closed</option>
-                <option value="resolved">Resolved</option>
-              </select>
-            </label>
-            {createError ? (
-              <div className="status error">{createError}</div>
-            ) : null}
-            <button className="primary" type="submit" disabled={creating}>
-              {creating ? 'Creating...' : 'Create market'}
-            </button>
-          </form>
+
+          {user ? (
+            <CreateMarketForm onMarketCreated={(newMarket) => {
+              setMarkets((prev) => [newMarket, ...prev]);
+              alert('Market created successfully!');
+            }} />
+          ) : (
+            <div className="status">
+              <p>You must be logged in to create a market.</p>
+              <button className="primary sm" onClick={() => setAuthModalType('login')}>Log In</button>
+            </div>
+          )}
         </section>
       </main>
 
@@ -314,4 +337,10 @@ function App() {
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
+  )
+}

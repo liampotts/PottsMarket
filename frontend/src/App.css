@@ -449,7 +449,78 @@
   cursor: pointer;
 }
 
-.secondary:hover {
-  background: var(--panel-strong);
-  transform: translateY(-1px);
+.text-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0 0.5rem;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.text-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* Navbar */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 3rem;
+  background-color: transparent;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.navbar-brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.navbar-user {
+  font-weight: 500;
+}
+
+/* Auth Modal */
+.auth-container {
+  width: 100%;
+}
+
+.auth-container h2 {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid #e2e7ec;
+  border-radius: 12px;
+  color: var(--ink);
+}
+
+.auth-switch {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
 }

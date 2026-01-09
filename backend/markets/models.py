@@ -19,6 +19,8 @@ class Market(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('auth.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='created_markets')
+    winning_outcome = models.ForeignKey('Outcome', null=True, blank=True, on_delete=models.SET_NULL, related_name='won_markets')
 
     class Meta:
         ordering = ['-created_at']
