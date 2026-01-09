@@ -102,7 +102,7 @@ function Navbar({ onOpenAuth, setView }) {
 }
 
 function MainApp() {
-  const apiBase = '/api'
+  const apiBase = import.meta.env.VITE_API_URL || '/api'
   const { user, refreshUser } = useAuth()
   const [markets, setMarkets] = useState([])
   const [loading, setLoading] = useState(true)
