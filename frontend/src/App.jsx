@@ -193,9 +193,14 @@ function MainApp() {
   }
 
   const handleDelete = async (slug) => {
-    if (!confirm('Are you sure you want to delete this market? This action cannot be undone.')) return;
+    console.log('Delete clicked for:', slug);
+    if (!window.confirm('Are you sure you want to delete this market? This action cannot be undone.')) {
+      console.log('Delete cancelled');
+      return;
+    }
 
     try {
+      console.log('Sending delete request...');
       const response = await fetch(`${apiBase}/markets/${slug}/delete/`, {
         method: 'DELETE',
         credentials: 'include',
