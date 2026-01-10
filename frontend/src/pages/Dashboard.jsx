@@ -9,7 +9,7 @@ export default function Dashboard({ user, onEditMarket }) {
         const fetchPortfolio = async () => {
             const apiBase = import.meta.env.VITE_API_URL || '/api';
             try {
-                const res = await fetch(`${apiBase}/portfolio/`);
+                const res = await fetch(`${apiBase}/portfolio/`, { credentials: 'include' });
                 if (res.ok) {
                     const data = await res.json();
                     setStats(data);

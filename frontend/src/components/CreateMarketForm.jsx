@@ -29,6 +29,7 @@ export default function CreateMarketForm({ onMarketCreated, initialData = null, 
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
+                credentials: 'include',
             })
             const data = await response.json()
             if (!response.ok) {

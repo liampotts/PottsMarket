@@ -118,7 +118,7 @@ function MainApp() {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(`${apiBase}/markets/`)
+      const response = await fetch(`${apiBase}/markets/`, { credentials: 'include' })
       if (!response.ok) {
         throw new Error('Failed to load markets.')
       }
@@ -142,8 +142,8 @@ function MainApp() {
       body: JSON.stringify({
         outcome_id: outcomeId,
         amount: amount,
-        // user_id removed, handled by session
-      })
+      }),
+      credentials: 'include',
     })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error || 'Trade failed')
@@ -158,7 +158,8 @@ function MainApp() {
       const response = await fetch(`${apiBase}/markets/${slug}/resolve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outcome_id: outcomeId })
+        body: JSON.stringify({ outcome_id: outcomeId }),
+        credentials: 'include',
       })
       if (!response.ok) throw new Error('Failed to resolve')
       alert('Market resolved!')
@@ -173,7 +174,8 @@ function MainApp() {
       const response = await fetch(`${apiBase}/markets/${slug}/redeem/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}) // User ID inferred from session
+        body: JSON.stringify({}),
+        credentials: 'include',
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.message || 'Failed to redeem')
@@ -196,6 +198,7 @@ function MainApp() {
     try {
       const response = await fetch(`${apiBase}/markets/${slug}/delete/`, {
         method: 'DELETE',
+        credentials: 'include',
       });
       if (!response.ok) {
         const data = await response.json();
@@ -310,7 +313,8 @@ function MainApp() {
                                   fetch(`${apiBase}/markets/${market.slug}/`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ ...market, status: 'open' })
+                                    body: JSON.stringify({ ...market, status: 'open' }),
+                                    credentials: 'include',
                                   })
                                     .then(res => {
                                       if (res.ok) {
