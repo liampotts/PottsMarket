@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export default function CreateMarketForm({ onMarketCreated, initialData = null, onCancel = null }) {
-    const apiBase = '/api';
+    const apiBase = import.meta.env.VITE_API_URL || '/api';
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState('');
 
