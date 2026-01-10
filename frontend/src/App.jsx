@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import CreateMarketForm from './components/CreateMarketForm'
+import ConfirmModal from './components/ConfirmModal'
 import Dashboard from './pages/Dashboard'
 
 // Simple modal for trading
@@ -113,6 +114,7 @@ function MainApp() {
   const [authModalType, setAuthModalType] = useState(null); // 'login' or 'signup'
   const [editingMarket, setEditingMarket] = useState(null);
   const [currentView, setCurrentView] = useState('feed'); // 'feed' | 'dashboard'
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // slug of market to delete
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -193,7 +195,6 @@ function MainApp() {
   }
 
   const handleDelete = async (slug) => {
-    // Skip confirm for now (browser confirm() has issues with React re-renders)
     try {
       const response = await fetch(`${apiBase}/markets/${slug}/delete/`, {
         method: 'DELETE',
@@ -207,6 +208,8 @@ function MainApp() {
       fetchMarkets();
     } catch (err) {
       alert(err.message);
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -327,7 +330,7 @@ function MainApp() {
                               }}>Publish</button>
                             )}
                             <button className="text-btn" onClick={() => setEditingMarket(market)}>Edit</button>
-                            <button className="text-btn delete-btn" onClick={() => handleDelete(market.slug)} style={{ color: 'red' }}>
+                            <button className="text-btn delete-btn" onClick={() => setDeleteConfirm(market.slug)} style={{ color: 'red' }}>
                               Delete
                             </button>
                           </div>
@@ -347,6 +350,15 @@ function MainApp() {
                 onTrade={handleTradeSubmit}
               />
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+              isOpen={!!deleteConfirm}
+              title="Delete Market"
+              message="Are you sure you want to delete this market? This action cannot be undone."
+              onConfirm={() => handleDelete(deleteConfirm)}
+              onCancel={() => setDeleteConfirm(null)}
+            />
 
             {/* Edit Market Modal */}
             {editingMarket && (

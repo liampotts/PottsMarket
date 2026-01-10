@@ -401,6 +401,11 @@
   border: 1px solid var(--line);
 }
 
+.modal-body {
+  margin-bottom: 1rem;
+  color: var(--muted);
+}
+
 .modal-actions {
   display: flex;
   gap: 1rem;
@@ -409,6 +414,15 @@
 
 .modal-actions button {
   flex: 1;
+}
+
+.primary.danger {
+  background: #d32f2f;
+  box-shadow: 0 10px 20px rgba(211, 47, 47, 0.25);
+}
+
+.primary.danger:hover {
+  box-shadow: 0 14px 24px rgba(211, 47, 47, 0.3);
 }
 
 @keyframes fadeIn {
