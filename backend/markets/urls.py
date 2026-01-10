@@ -11,6 +11,7 @@ urlpatterns = [
     path('markets/<slug:slug>/redeem/', views.redeem_shares, name='redeem_shares'),
     path('markets/<slug:slug>/delete/', views.delete_market, name='delete_market'),
     path('markets/<slug:slug>/ledger/', views.market_ledger, name='market_ledger'),
+    path('markets/<slug:slug>/comments/', views.market_comments, name='market_comments'),
     path('portfolio/', views.user_portfolio, name='user_portfolio'),
     
     # Auth Endpoints

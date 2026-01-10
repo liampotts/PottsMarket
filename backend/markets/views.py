@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Market, Outcome, Position
+from .models import Market, Outcome, Position, Comment
 from .services import CPMMService
 
 
@@ -388,3 +388,58 @@ def market_ledger(request, slug):
         'total_bettors': len(set(pos.user_id for pos in positions)),
     })
 
+
+@csrf_exempt
+def market_comments(request, slug):
+    """
+    GET: Returns all comments for a market.
+    POST: Adds a new comment to a market (requires auth).
+    """
+    market = get_object_or_404(Market, slug=slug)
+    
+    if request.method == 'POST':
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Authentication required.'}, status=401)
+        
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+        
+        text = (payload.get('text') or '').strip()
+        if not text:
+            return JsonResponse({'error': 'Comment text is required.'}, status=400)
+        if len(text) > 1000:
+            return JsonResponse({'error': 'Comment too long (max 1000 chars).'}, status=400)
+        
+        comment = Comment.objects.create(
+            market=market,
+            user=request.user,
+            text=text
+        )
+        
+        return JsonResponse({
+            'id': comment.id,
+            'username': comment.user.username,
+            'text': comment.text,
+            'created_at': comment.created_at.isoformat(),
+        }, status=201)
+    
+    # GET: Return all comments for this market
+    comments = market.comments.select_related('user').all()[:50]  # Limit to 50 comments
+    
+    comments_data = [
+        {
+            'id': c.id,
+            'username': c.user.username,
+            'text': c.text,
+            'created_at': c.created_at.isoformat(),
+        }
+        for c in comments
+    ]
+    
+    return JsonResponse({
+        'market': market.title,
+        'comments': comments_data,
+        'count': len(comments_data),
+    })

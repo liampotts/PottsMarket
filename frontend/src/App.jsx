@@ -116,6 +116,8 @@ function MainApp() {
   const [currentView, setCurrentView] = useState('feed'); // 'feed' | 'dashboard'
   const [deleteConfirm, setDeleteConfirm] = useState(null); // slug of market to delete
   const [activeLedger, setActiveLedger] = useState(null); // { market, ledger } for ledger modal
+  const [activeComments, setActiveComments] = useState(null); // { slug, market, comments } for comments modal
+  const [newComment, setNewComment] = useState('');
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -225,6 +227,42 @@ function MainApp() {
     }
   };
 
+  const fetchComments = async (slug, title) => {
+    try {
+      const response = await fetch(`${apiBase}/markets/${slug}/comments/`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to load comments');
+      const data = await response.json();
+      setActiveComments({ slug, market: title, comments: data.comments });
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const postComment = async () => {
+    if (!newComment.trim()) return;
+
+    try {
+      const response = await fetch(`${apiBase}/markets/${activeComments.slug}/comments/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: newComment }),
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to post comment');
+      }
+      const comment = await response.json();
+      setActiveComments(prev => ({
+        ...prev,
+        comments: [comment, ...prev.comments]
+      }));
+      setNewComment('');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const handleAuthSuccess = () => {
     setAuthModalType(null);
   };
@@ -316,6 +354,10 @@ function MainApp() {
 
                         <button className="ghost sm" onClick={() => fetchLedger(market.slug, market.title)}>
                           📊 Ledger
+                        </button>
+
+                        <button className="ghost sm" onClick={() => fetchComments(market.slug, market.title)}>
+                          💬 Comments
                         </button>
 
                         {market.status === 'resolved' && (
@@ -420,6 +462,54 @@ function MainApp() {
                         <span className="shares">{entry.shares.toFixed(2)} shares</span>
                         <span className="value">${entry.value.toFixed(2)}</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comments Modal */}
+      {activeComments && (
+        <div className="modal-overlay" onClick={() => { setActiveComments(null); setNewComment(''); }}>
+          <div className="modal comments-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>💬 Discussion</h3>
+              <button className="ghost sm" onClick={() => { setActiveComments(null); setNewComment(''); }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="comments-title">{activeComments.market}</p>
+
+              {user && (
+                <div className="comment-input-wrapper">
+                  <input
+                    type="text"
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') postComment(); }}
+                    maxLength={1000}
+                  />
+                  <button className="primary sm" onClick={postComment}>Post</button>
+                </div>
+              )}
+
+              {activeComments.comments.length === 0 ? (
+                <div className="empty-state">
+                  <p>No comments yet. Be the first!</p>
+                </div>
+              ) : (
+                <div className="comments-list">
+                  {activeComments.comments.map((comment) => (
+                    <div key={comment.id} className="comment-item">
+                      <div className="comment-header">
+                        <span className="comment-avatar">{comment.username.charAt(0).toUpperCase()}</span>
+                        <span className="comment-username">{comment.username}</span>
+                        <span className="comment-time">{new Date(comment.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <p className="comment-text">{comment.text}</p>
                     </div>
                   ))}
                 </div>
