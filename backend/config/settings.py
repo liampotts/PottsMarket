@@ -148,16 +148,19 @@ CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:
 CORS_ALLOW_CREDENTIALS = True
 
 # Session Cookie Config (for cross-origin auth)
-# In production, cookies must be Secure and SameSite=None to work cross-origin
-if not DEBUG:
-    SESSION_COOKIE_SAMESITE = 'None'
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SAMESITE = 'None'
-    CSRF_COOKIE_SECURE = True
-    # Trust origins for CSRF (required for Django admin and cross-origin POST)
-    CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
-    if not CSRF_TRUSTED_ORIGINS[0]:
-        CSRF_TRUSTED_ORIGINS = []
+# Cookies must be Secure and SameSite=None to work cross-origin
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = True
+
+# Trust origins for CSRF (required for Django admin and cross-origin POST)
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+if not CSRF_TRUSTED_ORIGINS[0]:
+    CSRF_TRUSTED_ORIGINS = []
+
+# If running locally without HTTPS, you might need to set these to False/Lax
+# But since localhost is considered secure, Secure=True should work fine on modern browsers.
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
