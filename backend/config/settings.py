@@ -154,6 +154,10 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SAMESITE = 'None'
     CSRF_COOKIE_SECURE = True
+    # Trust origins for CSRF (required for Django admin and cross-origin POST)
+    CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if not CSRF_TRUSTED_ORIGINS[0]:
+        CSRF_TRUSTED_ORIGINS = []
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
