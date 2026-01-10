@@ -404,7 +404,7 @@ function MainApp() {
               <div className="panel__header">
                 <div>
                   <h2>Create a market</h2>
-                  <p>Post to `api/markets/` to spin up a new idea.</p>
+                  <p>Launch a new prediction market for others to trade.</p>
                 </div>
               </div>
 

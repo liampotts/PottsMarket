@@ -9,7 +9,7 @@ export default function CreateMarketForm({ onMarketCreated, initialData = null, 
         title: '',
         slug: '',
         description: '',
-        status: 'draft',
+        status: 'open',
     });
 
     const handleChange = (event) => {
