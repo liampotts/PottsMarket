@@ -358,3 +358,33 @@ def user_portfolio(request):
         'username': user.username,
         'balance': float(user.userprofile.balance)
     })
+
+
+def market_ledger(request, slug):
+    """
+    Returns all positions for a market (public trading ledger).
+    Shows who bet on what and how much.
+    """
+    market = get_object_or_404(Market, slug=slug)
+    
+    # Get all positions for all outcomes of this market
+    positions = Position.objects.filter(
+        outcome__market=market,
+        shares__gt=0  # Only show positions with shares
+    ).select_related('user', 'outcome').order_by('-shares')
+    
+    ledger = []
+    for pos in positions:
+        ledger.append({
+            'username': pos.user.username,
+            'outcome': pos.outcome.name,
+            'shares': float(pos.shares),
+            'value': float(pos.shares * pos.outcome.current_price),
+        })
+    
+    return JsonResponse({
+        'market': market.title,
+        'ledger': ledger,
+        'total_bettors': len(set(pos.user_id for pos in positions)),
+    })
+

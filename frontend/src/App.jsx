@@ -115,6 +115,7 @@ function MainApp() {
   const [editingMarket, setEditingMarket] = useState(null);
   const [currentView, setCurrentView] = useState('feed'); // 'feed' | 'dashboard'
   const [deleteConfirm, setDeleteConfirm] = useState(null); // slug of market to delete
+  const [activeLedger, setActiveLedger] = useState(null); // { market, ledger } for ledger modal
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -213,6 +214,17 @@ function MainApp() {
     }
   };
 
+  const fetchLedger = async (slug, title) => {
+    try {
+      const response = await fetch(`${apiBase}/markets/${slug}/ledger/`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to load ledger');
+      const data = await response.json();
+      setActiveLedger({ market: title, ledger: data.ledger, totalBettors: data.total_bettors });
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const handleAuthSuccess = () => {
     setAuthModalType(null);
   };
@@ -302,6 +314,10 @@ function MainApp() {
                           }}>Trade</button>
                         )}
 
+                        <button className="ghost sm" onClick={() => fetchLedger(market.slug, market.title)}>
+                          📊 Ledger
+                        </button>
+
                         {market.status === 'resolved' && (
                           <button className="primary sm" onClick={() => handleRedeem(market.slug)}>Redeem Winnings</button>
                         )}
@@ -373,6 +389,44 @@ function MainApp() {
           onClose={() => setActiveTradeMarket(null)}
           onTrade={handleTradeSubmit}
         />
+      )}
+
+      {/* Ledger Modal */}
+      {activeLedger && (
+        <div className="modal-overlay" onClick={() => setActiveLedger(null)}>
+          <div className="modal ledger-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📊 Trading Ledger</h3>
+              <button className="ghost sm" onClick={() => setActiveLedger(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p className="ledger-title">{activeLedger.market}</p>
+              <p className="ledger-stats">{activeLedger.totalBettors} trader{activeLedger.totalBettors !== 1 ? 's' : ''}</p>
+
+              {activeLedger.ledger.length === 0 ? (
+                <div className="empty-state">
+                  <p>No bets placed yet</p>
+                </div>
+              ) : (
+                <div className="ledger-list">
+                  {activeLedger.ledger.map((entry, idx) => (
+                    <div key={idx} className="ledger-entry">
+                      <div className="ledger-user">
+                        <span className="user-avatar">{entry.username.charAt(0).toUpperCase()}</span>
+                        <span className="username">{entry.username}</span>
+                      </div>
+                      <div className="ledger-bet">
+                        <span className={`outcome-badge ${entry.outcome.toLowerCase()}`}>{entry.outcome}</span>
+                        <span className="shares">{entry.shares.toFixed(2)} shares</span>
+                        <span className="value">${entry.value.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}
