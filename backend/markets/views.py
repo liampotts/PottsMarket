@@ -82,6 +82,7 @@ def market_list(request):
             'description': market.description,
             'status': market.status,
             'created_at': market.created_at.isoformat(),
+            'created_by': market.created_by.username if market.created_by else None,
             'outcomes': [
                 {
                     'id': o.id,
