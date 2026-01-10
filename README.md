@@ -260,6 +260,34 @@ VITE_API_URL=https://your-backend.railway.app/api
 
 ---
 
+## Issues Solved
+
+### 1. Cross-Origin Authentication (Cookie Blocking)
+**Problem:**
+Deploying the frontend on Vercel (`vercel.app`) and backend on Railway (`railway.app`) created a cross-origin scenario. Browsers block `SameSite=Lax` cookies (Django's default) from third-party domains in POST requests, causing "Authentication required" errors despite being logged in.
+
+**Solution:**
+We updated Django's `settings.py` to explicitly allow cross-site cookies, even when `DEBUG=True`:
+```python
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SECURE = True
+```
+
+### 2. Mobile Authentication (ITP / 3rd-Party Blocking)
+**Problem:**
+Even with the above settings, mobile browsers (especially Safari on iOS) enforce **Intelligent Tracking Prevention (ITP)**. This blocks *all* third-party cookies by default to prevent tracking. Since our API (`railway.app`) is a different domain from our frontend (`vercel.app`), the session cookie was blocked entirely on mobile, breaking login.
+
+**Solution:**
+We implemented **Vercel Rewrites** to proxy API requests.
+1. Added `vercel.json` to route `/api/*` -> `https://backend.railway.app/api/*`.
+2. Frontend now makes requests to its *own* domain (`/api/...`).
+3. The browser sees this as a **first-party** request and allows the cookie.
+4. Vercel forwards the cookie to the backend invisibly.
+
+---
+
 ## License
 
 MIT
