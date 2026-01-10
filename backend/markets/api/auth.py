@@ -21,7 +21,8 @@ def login_view(request):
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
-                'balance': float(user.userprofile.balance)
+                'balance': float(user.userprofile.balance),
+                'is_staff': user.is_staff or user.is_superuser,
             })
         else:
             return JsonResponse({'error': 'Invalid credentials'}, status=401)
@@ -55,7 +56,8 @@ def signup_view(request):
         return JsonResponse({
             'id': user.id,
             'username': user.username,
-            'email': user.email
+            'email': user.email,
+            'is_staff': user.is_staff or user.is_superuser,
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -68,5 +70,6 @@ def me_view(request):
         'id': request.user.id,
         'username': request.user.username,
         'email': request.user.email,
-        'balance': float(request.user.userprofile.balance)
+        'balance': float(request.user.userprofile.balance),
+        'is_staff': request.user.is_staff or request.user.is_superuser,
     })

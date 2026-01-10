@@ -306,7 +306,7 @@ function MainApp() {
                           <button className="primary sm" onClick={() => handleRedeem(market.slug)}>Redeem Winnings</button>
                         )}
 
-                        {user && market.created_by === user.username && (
+                        {user && (market.created_by === user.username || user.is_staff) && (
                           <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
                             {market.status === 'draft' && (
                               <button className="primary sm" onClick={() => {

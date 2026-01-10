@@ -106,7 +106,9 @@ def market_detail(request, slug):
         if not request.user.is_authenticated:
             return JsonResponse({'error': 'Authentication required.'}, status=401)
         
-        if market.created_by != request.user:
+        # Allow staff/superusers to edit any market
+        is_admin = request.user.is_staff or request.user.is_superuser
+        if market.created_by != request.user and not is_admin:
             return JsonResponse({'error': 'Permission denied.'}, status=403)
 
         try:
@@ -300,7 +302,9 @@ def delete_market(request, slug):
 
     market = get_object_or_404(Market, slug=slug)
 
-    if market.created_by != request.user:
+    # Allow staff/superusers to delete any market
+    is_admin = request.user.is_staff or request.user.is_superuser
+    if market.created_by != request.user and not is_admin:
         return JsonResponse({'error': 'Permission denied. You are not the owner.'}, status=403)
 
     market.delete()
