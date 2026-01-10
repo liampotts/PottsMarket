@@ -342,76 +342,6 @@ function MainApp() {
               )}
             </section>
 
-
-            {activeTradeMarket && (
-              <TradeModal
-                market={activeTradeMarket}
-                onClose={() => setActiveTradeMarket(null)}
-                onTrade={handleTradeSubmit}
-              />
-            )}
-
-            {/* Delete Confirmation Modal */}
-            <ConfirmModal
-              isOpen={!!deleteConfirm}
-              title="Delete Market"
-              message="Are you sure you want to delete this market? This action cannot be undone."
-              onConfirm={() => handleDelete(deleteConfirm)}
-              onCancel={() => setDeleteConfirm(null)}
-            />
-
-            {/* Edit Market Modal */}
-            {editingMarket && (
-              <div className="modal-overlay">
-                <div className="modal">
-                  <div className="modal-header">
-                    <h3>Edit Market</h3>
-                    <button className="ghost sm" onClick={() => setEditingMarket(null)}>✕</button>
-                  </div>
-                  <CreateMarketForm
-                    initialData={editingMarket}
-                    onCancel={() => setEditingMarket(null)}
-                    onMarketCreated={(updatedMarket) => {
-                      // Update local state
-                      setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
-                      setEditingMarket(null);
-                      alert('Market updated!');
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Auth Modal */}
-            {
-              authModalType && (
-                <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
-                  <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
-                    <div className="modal-header">
-                      <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
-                      <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
-                    </div>
-
-                    {authModalType === 'login' ? (
-                      <>
-                        <LoginPage onLoginSuccess={handleAuthSuccess} />
-                        <p className="auth-switch">
-                          Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <SignupPage onSignupSuccess={handleAuthSuccess} />
-                        <p className="auth-switch">
-                          Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )
-            }
-
             <section className="panel panel--accent">
               <div className="panel__header">
                 <div>
@@ -435,6 +365,74 @@ function MainApp() {
           </>
         )}
       </main>
+
+      {/* Global Modals - Render outside view conditional */}
+      {activeTradeMarket && (
+        <TradeModal
+          market={activeTradeMarket}
+          onClose={() => setActiveTradeMarket(null)}
+          onTrade={handleTradeSubmit}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteConfirm}
+        title="Delete Market"
+        message="Are you sure you want to delete this market? This action cannot be undone."
+        onConfirm={() => handleDelete(deleteConfirm)}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Edit Market Modal */}
+      {editingMarket && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Edit Market</h3>
+              <button className="ghost sm" onClick={() => setEditingMarket(null)}>✕</button>
+            </div>
+            <CreateMarketForm
+              initialData={editingMarket}
+              onCancel={() => setEditingMarket(null)}
+              onMarketCreated={(updatedMarket) => {
+                // Update local state
+                setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
+                setEditingMarket(null);
+                alert('Market updated!');
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      {authModalType && (
+        <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
+          <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
+              <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
+            </div>
+
+            {authModalType === 'login' ? (
+              <>
+                <LoginPage onLoginSuccess={handleAuthSuccess} />
+                <p className="auth-switch">
+                  Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
+                </p>
+              </>
+            ) : (
+              <>
+                <SignupPage onSignupSuccess={handleAuthSuccess} />
+                <p className="auth-switch">
+                  Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <footer className="footer">
         <span>Built for fast signals and sharper predictions.</span>
