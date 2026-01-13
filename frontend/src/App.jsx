@@ -62,8 +62,8 @@ function MainApp() {
     setAlertInfo({ title, message });
   };
 
-  const fetchMarkets = async () => {
-    setLoading(true)
+  const fetchMarkets = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
       const response = await fetch(`${apiBase}/markets/`, { credentials: 'include' })
@@ -75,7 +75,7 @@ function MainApp() {
     } catch (err) {
       setError(err.message || 'Something went wrong.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -97,7 +97,7 @@ function MainApp() {
     if (!response.ok) throw new Error(data.error || 'Trade failed')
 
     // Refresh markets to update prices
-    fetchMarkets()
+    fetchMarkets(true)
     refreshUser() // Update balance
     return data
   }
@@ -111,7 +111,7 @@ function MainApp() {
       })
       if (!response.ok) throw new Error('Failed to resolve')
       showAlert('Success', 'Market resolved!');
-      fetchMarkets()
+      fetchMarkets(true)
     } catch (err) {
       showAlert('Error', err.message);
     }
@@ -129,14 +129,14 @@ function MainApp() {
       if (!response.ok) throw new Error(data.message || 'Failed to redeem')
 
       if (data.payout > 0) {
-        alert(`Redeemed $${data.payout.toFixed(2)}!`)
+        showAlert('Winnings Redeemed!', `You have redeemed $${data.payout.toFixed(2)}.`);
       } else {
-        alert(data.message || 'No winnings to redeem.')
+        showAlert('No Winnings', data.message || 'No winnings to redeem.');
       }
-      fetchMarkets()
+      fetchMarkets(true)
       refreshUser() // Update balance
     } catch (err) {
-      alert(err.message)
+      showAlert('Error', err.message);
     }
   }
 
@@ -150,10 +150,10 @@ function MainApp() {
         const data = await response.json();
         throw new Error(data.error || 'Failed to delete market');
       }
-      alert('Market deleted.');
-      fetchMarkets();
+      showAlert('Success', 'Market deleted.');
+      fetchMarkets(true);
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     } finally {
       setDeleteConfirm(null);
     }
@@ -166,7 +166,7 @@ function MainApp() {
       const data = await response.json();
       setActiveLedger({ market: title, ledger: data.ledger, totalBettors: data.total_bettors });
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     }
   };
 
@@ -177,7 +177,7 @@ function MainApp() {
       const data = await response.json();
       setActiveComments({ slug, market: title, comments: data.comments });
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     }
   };
 
@@ -199,7 +199,7 @@ function MainApp() {
         comments: [comment, ...prev.comments]
       }));
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     }
   };
 
@@ -212,13 +212,13 @@ function MainApp() {
         credentials: 'include',
       });
       if (response.ok) {
-        alert('Market published!');
-        fetchMarkets();
+        showAlert('Success', 'Market published!');
+        fetchMarkets(true);
       } else {
-        alert('Failed to publish.');
+        showAlert('Error', 'Failed to publish.');
       }
     } catch (err) {
-      alert(err.message);
+      showAlert('Error', err.message);
     } finally {
       setPublishingMarket(null);
     }
@@ -357,7 +357,7 @@ function MainApp() {
               {user ? (
                 <CreateMarketForm onMarketCreated={(newMarket) => {
                   setMarkets((prev) => [newMarket, ...prev]);
-                  alert('Market created successfully!');
+                  showAlert('Success', 'Market created successfully!');
                 }} />
               ) : (
                 <div className="status">
@@ -429,7 +429,7 @@ function MainApp() {
         onMarketUpdated={(updatedMarket) => {
           setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
           setEditingMarket(null);
-          alert('Market updated!');
+          showAlert('Success', 'Market updated!');
         }}
       />
 
