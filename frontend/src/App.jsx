@@ -6,78 +6,13 @@ import SignupPage from './pages/SignupPage'
 import CreateMarketForm from './components/CreateMarketForm'
 import ConfirmModal from './components/ConfirmModal'
 import ResolveModal from './components/ResolveModal'
+import PublishModal from './components/PublishModal'
+import TradeModal from './components/TradeModal'
+import AuthModal from './components/AuthModal'
+import LedgerModal from './components/LedgerModal'
+import CommentsModal from './components/CommentsModal'
+import EditMarketModal from './components/EditMarketModal'
 import Dashboard from './pages/Dashboard'
-
-// Simple modal for trading
-function TradeModal({ market, onClose, onTrade }) {
-  const [outcomeId, setOutcomeId] = useState(market.outcomes[0]?.id || '')
-  const [amount, setAmount] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const handleTrade = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    try {
-      await onTrade(market.slug, outcomeId, amount)
-      onClose()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const selectedOutcome = market.outcomes.find(o => String(o.id) === String(outcomeId))
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <div className="modal-header">
-          <h3>Trade: {market.title}</h3>
-          <button className="ghost sm" onClick={onClose}>✕</button>
-        </div>
-        <form onSubmit={handleTrade} className="form">
-          <label>
-            Outcome
-            <select value={outcomeId} onChange={e => setOutcomeId(e.target.value)}>
-              {market.outcomes.map(o => (
-                <option key={o.id} value={o.id}>{o.name} (${Number(o.price).toFixed(2)})</option>
-              ))}
-            </select>
-          </label>
-
-          <div className="price-display">
-            Current Price: <strong>{selectedOutcome?.name} = {Number(selectedOutcome?.price || 0).toFixed(2)}</strong>
-          </div>
-
-          <label>
-            Amount (USD)
-            <input
-              type="number"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              placeholder="10.00"
-              step="0.01"
-              min="0.1"
-              required
-            />
-          </label>
-
-          {error && <div className="status error">{error}</div>}
-
-          <div className="modal-actions">
-            <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary" disabled={loading}>
-              {loading ? 'Buying...' : `Buy ${selectedOutcome?.name}`}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 function Navbar({ onOpenAuth, setView }) {
   const { user, logout } = useAuth();
@@ -119,7 +54,7 @@ function MainApp() {
   const [activeLedger, setActiveLedger] = useState(null); // { market, ledger } for ledger modal
   const [activeComments, setActiveComments] = useState(null); // { slug, market, comments } for comments modal
   const [resolvingMarket, setResolvingMarket] = useState(null); // { slug, outcomeId, marketTitle, outcomeName }
-  const [newComment, setNewComment] = useState('');
+  const [publishingMarket, setPublishingMarket] = useState(null); // market object to publish
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -240,14 +175,12 @@ function MainApp() {
     }
   };
 
-  const postComment = async () => {
-    if (!newComment.trim()) return;
-
+  const postComment = async (text) => {
     try {
       const response = await fetch(`${apiBase}/markets/${activeComments.slug}/comments/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: newComment }),
+        body: JSON.stringify({ text }),
         credentials: 'include',
       });
       if (!response.ok) {
@@ -259,9 +192,29 @@ function MainApp() {
         ...prev,
         comments: [comment, ...prev.comments]
       }));
-      setNewComment('');
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handlePublish = async (market) => {
+    try {
+      const response = await fetch(`${apiBase}/markets/${market.slug}/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...market, status: 'open' }),
+        credentials: 'include',
+      });
+      if (response.ok) {
+        alert('Market published!');
+        fetchMarkets();
+      } else {
+        alert('Failed to publish.');
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPublishingMarket(null);
     }
   };
 
@@ -372,25 +325,7 @@ function MainApp() {
                         {user && (market.created_by === user.username || user.is_staff) && (
                           <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
                             {market.status === 'draft' && (
-                              <button className="primary sm" onClick={() => {
-                                if (confirm('Publish this market? It will be open for trading.')) {
-                                  // Quick publish action reusing the update endpoint
-                                  fetch(`${apiBase}/markets/${market.slug}/`, {
-                                    method: 'PUT',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ ...market, status: 'open' }),
-                                    credentials: 'include',
-                                  })
-                                    .then(res => {
-                                      if (res.ok) {
-                                        alert('Market published!');
-                                        fetchMarkets();
-                                      } else {
-                                        alert('Failed to publish.');
-                                      }
-                                    })
-                                }
-                              }}>Publish</button>
+                              <button className="primary sm" onClick={() => setPublishingMarket(market)}>Publish</button>
                             )}
                             <button className="text-btn" onClick={() => setEditingMarket(market)}>Edit</button>
                             <button className="text-btn delete-btn" onClick={() => setDeleteConfirm(market.slug)} style={{ color: 'red' }}>
@@ -429,7 +364,7 @@ function MainApp() {
         )}
       </main>
 
-      {/* Global Modals - Render outside view conditional */}
+      {/* Modal Components */}
       {activeTradeMarket && (
         <TradeModal
           market={activeTradeMarket}
@@ -438,93 +373,23 @@ function MainApp() {
         />
       )}
 
-      {/* Ledger Modal */}
-      {activeLedger && (
-        <div className="modal-overlay" onClick={() => setActiveLedger(null)}>
-          <div className="modal ledger-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>📊 Trading Ledger</h3>
-              <button className="ghost sm" onClick={() => setActiveLedger(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <p className="ledger-title">{activeLedger.market}</p>
-              <p className="ledger-stats">{activeLedger.totalBettors} trader{activeLedger.totalBettors !== 1 ? 's' : ''}</p>
+      <LedgerModal
+        isOpen={!!activeLedger}
+        marketTitle={activeLedger?.market}
+        totalBettors={activeLedger?.totalBettors}
+        ledger={activeLedger?.ledger}
+        onClose={() => setActiveLedger(null)}
+      />
 
-              {activeLedger.ledger.length === 0 ? (
-                <div className="empty-state">
-                  <p>No bets placed yet</p>
-                </div>
-              ) : (
-                <div className="ledger-list">
-                  {activeLedger.ledger.map((entry, idx) => (
-                    <div key={idx} className="ledger-entry">
-                      <div className="ledger-user">
-                        <span className="user-avatar">{entry.username.charAt(0).toUpperCase()}</span>
-                        <span className="username">{entry.username}</span>
-                      </div>
-                      <div className="ledger-bet">
-                        <span className={`outcome-badge ${entry.outcome.toLowerCase()}`}>{entry.outcome}</span>
-                        <span className="shares">{entry.shares.toFixed(2)} shares</span>
-                        <span className="value">${entry.value.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <CommentsModal
+        isOpen={!!activeComments}
+        marketTitle={activeComments?.market}
+        comments={activeComments?.comments}
+        user={user}
+        onClose={() => setActiveComments(null)}
+        onPostComment={postComment}
+      />
 
-      {/* Comments Modal */}
-      {activeComments && (
-        <div className="modal-overlay" onClick={() => { setActiveComments(null); setNewComment(''); }}>
-          <div className="modal comments-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>💬 Discussion</h3>
-              <button className="ghost sm" onClick={() => { setActiveComments(null); setNewComment(''); }}>✕</button>
-            </div>
-            <div className="modal-body">
-              <p className="comments-title">{activeComments.market}</p>
-
-              {user && (
-                <div className="comment-input-wrapper">
-                  <input
-                    type="text"
-                    placeholder="Add a comment..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') postComment(); }}
-                    maxLength={1000}
-                  />
-                  <button className="primary sm" onClick={postComment}>Post</button>
-                </div>
-              )}
-
-              {activeComments.comments.length === 0 ? (
-                <div className="empty-state">
-                  <p>No comments yet. Be the first!</p>
-                </div>
-              ) : (
-                <div className="comments-list">
-                  {activeComments.comments.map((comment) => (
-                    <div key={comment.id} className="comment-item">
-                      <div className="comment-header">
-                        <span className="comment-avatar">{comment.username.charAt(0).toUpperCase()}</span>
-                        <span className="comment-username">{comment.username}</span>
-                        <span className="comment-time">{new Date(comment.created_at).toLocaleDateString()}</span>
-                      </div>
-                      <p className="comment-text">{comment.text}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={!!deleteConfirm}
         title="Delete Market"
@@ -533,7 +398,6 @@ function MainApp() {
         onCancel={() => setDeleteConfirm(null)}
       />
 
-      {/* Resolve Confirmation Modal */}
       <ResolveModal
         isOpen={!!resolvingMarket}
         marketTitle={resolvingMarket?.marketTitle}
@@ -545,55 +409,31 @@ function MainApp() {
         onCancel={() => setResolvingMarket(null)}
       />
 
-      {/* Edit Market Modal */}
-      {editingMarket && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>Edit Market</h3>
-              <button className="ghost sm" onClick={() => setEditingMarket(null)}>✕</button>
-            </div>
-            <CreateMarketForm
-              initialData={editingMarket}
-              onCancel={() => setEditingMarket(null)}
-              onMarketCreated={(updatedMarket) => {
-                // Update local state
-                setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
-                setEditingMarket(null);
-                alert('Market updated!');
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <PublishModal
+        isOpen={!!publishingMarket}
+        marketTitle={publishingMarket?.title}
+        onConfirm={() => handlePublish(publishingMarket)}
+        onCancel={() => setPublishingMarket(null)}
+      />
 
-      {/* Auth Modal */}
-      {authModalType && (
-        <div className="modal-overlay" onClick={() => setAuthModalType(null)}>
-          <div className="modal auth-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{authModalType === 'login' ? 'Log In' : 'Sign Up'}</h3>
-              <button className="ghost sm" onClick={() => setAuthModalType(null)}>✕</button>
-            </div>
+      <EditMarketModal
+        isOpen={!!editingMarket}
+        market={editingMarket}
+        onClose={() => setEditingMarket(null)}
+        onMarketUpdated={(updatedMarket) => {
+          setMarkets(prev => prev.map(m => m.id === updatedMarket.id ? updatedMarket : m));
+          setEditingMarket(null);
+          alert('Market updated!');
+        }}
+      />
 
-            {authModalType === 'login' ? (
-              <>
-                <LoginPage onLoginSuccess={handleAuthSuccess} />
-                <p className="auth-switch">
-                  Don't have an account? <button className="text-btn" onClick={() => setAuthModalType('signup')}>Sign Up</button>
-                </p>
-              </>
-            ) : (
-              <>
-                <SignupPage onSignupSuccess={handleAuthSuccess} />
-                <p className="auth-switch">
-                  Already have an account? <button className="text-btn" onClick={() => setAuthModalType('login')}>Log In</button>
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <AuthModal
+        isOpen={!!authModalType}
+        type={authModalType}
+        onClose={() => setAuthModalType(null)}
+        onSwitchType={setAuthModalType}
+        onSuccess={handleAuthSuccess}
+      />
 
       <footer className="footer">
         <span>Built for fast signals and sharper predictions.</span>
