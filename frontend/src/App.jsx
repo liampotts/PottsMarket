@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import CreateMarketForm from './components/CreateMarketForm'
 import ConfirmModal from './components/ConfirmModal'
+import ResolveModal from './components/ResolveModal'
 import Dashboard from './pages/Dashboard'
 
 // Simple modal for trading
@@ -117,6 +118,7 @@ function MainApp() {
   const [deleteConfirm, setDeleteConfirm] = useState(null); // slug of market to delete
   const [activeLedger, setActiveLedger] = useState(null); // { market, ledger } for ledger modal
   const [activeComments, setActiveComments] = useState(null); // { slug, market, comments } for comments modal
+  const [resolvingMarket, setResolvingMarket] = useState(null); // { slug, outcomeId, marketTitle, outcomeName }
   const [newComment, setNewComment] = useState('');
 
   const fetchMarkets = async () => {
@@ -331,9 +333,12 @@ function MainApp() {
                               {/* Admin Resolve Action (Simulated) */}
                               {market.status !== 'resolved' && (
                                 <button className="text-btn" onClick={() => {
-                                  if (confirm(`Resolve this market as ${outcome.name} WON?`)) {
-                                    handleResolve(market.slug, outcome.id)
-                                  }
+                                  setResolvingMarket({
+                                    slug: market.slug,
+                                    outcomeId: outcome.id,
+                                    marketTitle: market.title,
+                                    outcomeName: outcome.name
+                                  });
                                 }}>🏆 Win</button>
                               )}
                             </div>
@@ -526,6 +531,18 @@ function MainApp() {
         message="Are you sure you want to delete this market? This action cannot be undone."
         onConfirm={() => handleDelete(deleteConfirm)}
         onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Resolve Confirmation Modal */}
+      <ResolveModal
+        isOpen={!!resolvingMarket}
+        marketTitle={resolvingMarket?.marketTitle}
+        outcomeName={resolvingMarket?.outcomeName}
+        onConfirm={() => {
+          handleResolve(resolvingMarket.slug, resolvingMarket.outcomeId);
+          setResolvingMarket(null);
+        }}
+        onCancel={() => setResolvingMarket(null)}
       />
 
       {/* Edit Market Modal */}
