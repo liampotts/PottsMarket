@@ -12,6 +12,7 @@ import AuthModal from './components/AuthModal'
 import LedgerModal from './components/LedgerModal'
 import CommentsModal from './components/CommentsModal'
 import EditMarketModal from './components/EditMarketModal'
+import AlertModal from './components/AlertModal'
 import Dashboard from './pages/Dashboard'
 
 function Navbar({ onOpenAuth, setView }) {
@@ -55,6 +56,11 @@ function MainApp() {
   const [activeComments, setActiveComments] = useState(null); // { slug, market, comments } for comments modal
   const [resolvingMarket, setResolvingMarket] = useState(null); // { slug, outcomeId, marketTitle, outcomeName }
   const [publishingMarket, setPublishingMarket] = useState(null); // market object to publish
+  const [alertInfo, setAlertInfo] = useState(null); // { title: string, message: string }
+
+  const showAlert = (title, message) => {
+    setAlertInfo({ title, message });
+  };
 
   const fetchMarkets = async () => {
     setLoading(true)
@@ -104,10 +110,10 @@ function MainApp() {
         credentials: 'include',
       })
       if (!response.ok) throw new Error('Failed to resolve')
-      alert('Market resolved!')
+      showAlert('Success', 'Market resolved!');
       fetchMarkets()
     } catch (err) {
-      alert(err.message)
+      showAlert('Error', err.message);
     }
   }
 
@@ -433,6 +439,13 @@ function MainApp() {
         onClose={() => setAuthModalType(null)}
         onSwitchType={setAuthModalType}
         onSuccess={handleAuthSuccess}
+      />
+
+      <AlertModal
+        isOpen={!!alertInfo}
+        title={alertInfo?.title}
+        message={alertInfo?.message}
+        onClose={() => setAlertInfo(null)}
       />
 
       <footer className="footer">
