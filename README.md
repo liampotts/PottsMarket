@@ -281,10 +281,11 @@ Even with the above settings, mobile browsers (especially Safari on iOS) enforce
 
 **Solution:**
 We implemented **Vercel Rewrites** to proxy API requests.
-1. Added `vercel.json` to route `/api/*` -> `https://backend.railway.app/api/*`.
-2. Frontend now makes requests to its *own* domain (`/api/...`).
-3. The browser sees this as a **first-party** request and allows the cookie.
-4. Vercel forwards the cookie to the backend invisibly.
+1. Added `vercel.json` to front the API.
+2. Used **Regex-based Rewrites** (`source: "/api/(.*)"`, `destination: ".../api/$1"`) because standard wildcards (`/api/:path*`) failed to correctly forward paths on Vercel.
+3. Frontend now makes requests to its *own* domain (`/api/...`).
+4. The browser sees this as a **first-party** request and allows the cookie.
+5. Vercel forwards the cookie to the backend invisibly.
 
 ---
 
