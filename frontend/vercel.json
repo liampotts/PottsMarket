@@ -12,6 +12,10 @@
             "destination": "https://www.google.com"
         },
         {
+            "source": "/test-api-simple",
+            "destination": "https://pottsmarket-production.up.railway.app/api/markets/"
+        },
+        {
             "source": "/api/:path*",
             "destination": "https://pottsmarket-production.up.railway.app/api/:path*"
         }
