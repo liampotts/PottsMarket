@@ -6,14 +6,4 @@
             "permanent": false
         }
     ],
-    "rewrites": [
-        {
-            "source": "/google-proxy",
-            "destination": "https://www.google.com"
-        },
-        {
-            "source": "/api/:path*",
-            "destination": "https://pottsmarket-production.up.railway.app/api/:path*"
-        }
-    ]
 }
