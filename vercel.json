@@ -1,6 +1,16 @@
 {
     "rewrites": [
         {
+            "source": "/test-redirect",
+            "destination": "https://google.com",
+            "permanent": false
+        },
+        {
+            "source": "/test-redirect",
+            "destination": "https://google.com",
+            "permanent": false
+        },
+        {
             "source": "/api/:path*",
             "destination": "https://pottsmarket-production.up.railway.app/api/:path*"
         }
