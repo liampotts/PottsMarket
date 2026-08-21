@@ -181,8 +181,8 @@ UserProfile
 ## Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+
+- Python 3.12+
+- Node.js 22.12+
 - PostgreSQL (or use SQLite for local dev)
 
 ### Backend Setup

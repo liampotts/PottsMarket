@@ -1,6 +1,5 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
-
-const AuthContext = createContext(null);
+import { useCallback, useEffect, useState } from 'react';
+import { AuthContext } from './auth';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -8,11 +7,7 @@ export const AuthProvider = ({ children }) => {
 
     const apiBase = import.meta.env.VITE_API_URL || '/api';
 
-    useEffect(() => {
-        checkUserLoggedIn();
-    }, []);
-
-    const checkUserLoggedIn = async () => {
+    const checkUserLoggedIn = useCallback(async () => {
         try {
             const res = await fetch(`${apiBase}/auth/me/`, { credentials: 'include' });
             if (res.ok) {
@@ -27,7 +22,11 @@ export const AuthProvider = ({ children }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [apiBase]);
+
+    useEffect(() => {
+        checkUserLoggedIn();
+    }, [checkUserLoggedIn]);
 
     const login = async (username, password) => {
         const res = await fetch(`${apiBase}/auth/login/`, {
@@ -72,5 +71,3 @@ export const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
-
-export const useAuth = () => useContext(AuthContext);

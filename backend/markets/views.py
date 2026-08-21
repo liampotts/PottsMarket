@@ -1,12 +1,27 @@
 import json
 from decimal import Decimal
 
+from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import Market, Outcome, Position, Comment
 from .services import CPMMService
+
+
+def health_check(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except Exception:
+        return JsonResponse({'status': 'unhealthy'}, status=503)
+
+    return JsonResponse({'status': 'ok'})
 
 
 @csrf_exempt
@@ -154,8 +169,6 @@ def market_detail(request, slug):
     }
     return JsonResponse(payload)
 
-from .services import CPMMService
-from django.contrib.auth.models import User  # For demo, using first user or auth
 
 @csrf_exempt
 def trade_market(request, slug):
@@ -163,6 +176,9 @@ def trade_market(request, slug):
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
 
     market = get_object_or_404(Market, slug=slug)
+
+    if market.status != Market.STATUS_OPEN:
+        return JsonResponse({'error': 'This market is not open for trading.'}, status=400)
     
     try:
         payload = json.loads(request.body.decode('utf-8') or '{}')
@@ -198,20 +214,9 @@ def trade_market(request, slug):
         outcome.refresh_from_db()
 
     try:
-        # Check Balance
-        if user.userprofile.balance < amount:
-             return JsonResponse({'error': 'Insufficient funds.'}, status=400)
-
         result = CPMMService.buy_tokens(user, outcome, amount)
-        
-        # Deduct Balance (Atomic with buy_tokens would be better, but doing here for now)
-        # Note: CPMMService.buy_tokens is atomic, but this deduction is outside it.
-        # Ideally we move this into CPMMService.
-        user.userprofile.balance -= amount
-        user.userprofile.save()
-        
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    except ValueError as error:
+        return JsonResponse({'error': str(error)}, status=400)
 
     return JsonResponse({
         'status': 'success',
@@ -235,8 +240,16 @@ def resolve_market(request, slug):
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
 
     market = get_object_or_404(Market, slug=slug)
-    
-    # In a real app, check for request.user.is_staff or similar
+
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required.'}, status=401)
+
+    is_admin = request.user.is_staff or request.user.is_superuser
+    if market.created_by != request.user and not is_admin:
+        return JsonResponse({'error': 'Permission denied.'}, status=403)
+
+    if market.status == Market.STATUS_RESOLVED:
+        return JsonResponse({'error': 'Market is already resolved.'}, status=400)
     
     try:
         payload = json.loads(request.body.decode('utf-8') or '{}')
