@@ -198,6 +198,61 @@ function ManualClaimForm({ source, onCreate, busy }) {
   )
 }
 
+function TranscriptFallback({ source, onSubmit, busy }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState(source.title || '')
+  const [transcript, setTranscript] = useState('')
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const accepted = await onSubmit(source.id, { title, transcript })
+    if (accepted) {
+      setTranscript('')
+      setOpen(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="transcript-fallback__prompt">
+        <div>
+          <strong>Caption access blocked?</strong>
+          <span>Paste the transcript from YouTube and keep the same review workflow.</span>
+        </div>
+        <button className="secondary sm" disabled={busy} onClick={() => setOpen(true)}>Paste transcript</button>
+      </div>
+    )
+  }
+
+  return (
+    <form className="transcript-fallback" onSubmit={submit}>
+      <div>
+        <h4>Use an editorial transcript</h4>
+        <p>In YouTube, open the video description, choose “Show transcript,” then copy and paste the text here.</p>
+      </div>
+      <label>
+        Source title (optional)
+        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Video title" />
+      </label>
+      <label>
+        Transcript text
+        <textarea
+          required
+          minLength="80"
+          rows="10"
+          value={transcript}
+          onChange={(event) => setTranscript(event.target.value)}
+          placeholder="Paste at least 80 characters of transcript text…"
+        />
+      </label>
+      <div className="claim-editor__actions">
+        <button type="button" className="ghost sm" onClick={() => setOpen(false)}>Cancel</button>
+        <button className="primary sm" disabled={busy || transcript.trim().length < 80}>Process transcript</button>
+      </div>
+    </form>
+  )
+}
+
 export default function ClaimLab({ apiBase, config, onMarketPublished }) {
   const [sources, setSources] = useState([])
   const [url, setUrl] = useState('')
@@ -269,6 +324,28 @@ export default function ClaimLab({ apiBase, config, onMarketPublished }) {
       await loadSources(true)
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitTranscript = async (sourceId, payload) => {
+    setBusy(true)
+    setError('')
+    try {
+      const response = await fetch(`${apiBase}/claim-lab/sources/${sourceId}/transcript/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'include',
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not process the pasted transcript.')
+      await loadSources(true)
+      return true
+    } catch (requestError) {
+      setError(requestError.message)
+      return false
     } finally {
       setBusy(false)
     }
@@ -402,6 +479,10 @@ export default function ClaimLab({ apiBase, config, onMarketPublished }) {
                   {source.error}
                   <button className="ghost sm" disabled={busy} onClick={() => retrySource(source.id)}>Retry</button>
                 </div>
+              )}
+
+              {source.status === 'failed' && (
+                <TranscriptFallback source={source} onSubmit={submitTranscript} busy={busy} />
               )}
 
               {['queued', 'processing'].includes(source.status) && (

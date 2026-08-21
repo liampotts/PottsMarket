@@ -83,6 +83,11 @@ def _serialize_source(source, include_claims=True):
     claims = []
     if include_claims and hasattr(source, 'document'):
         claims = [_serialize_claim(claim) for claim in source.document.claims.all()]
+    public_metadata = {
+        key: value
+        for key, value in (source.metadata or {}).items()
+        if key not in {'editorial_transcript', 'editorial_title'}
+    }
     return {
         'id': source.id,
         'source_type': source.source_type,
@@ -92,7 +97,7 @@ def _serialize_source(source, include_claims=True):
         'author': source.author,
         'status': source.status,
         'error': source.error,
-        'metadata': source.metadata,
+        'metadata': public_metadata,
         'created_by': source.created_by.username,
         'created_at': source.created_at.isoformat(),
         'processed_at': source.processed_at.isoformat() if source.processed_at else None,
@@ -273,6 +278,47 @@ def source_retry(request, source_id):
     except Exception as error:
         source.status = Source.STATUS_FAILED
         source.error = f'Could not queue ingestion: {error}'
+        source.save(update_fields=['status', 'error'])
+        return JsonResponse({'error': source.error}, status=503)
+    return JsonResponse({'status': 'queued', 'source_id': source.id})
+
+
+@csrf_exempt
+def source_transcript(request, source_id):
+    access_error = _require_access(request)
+    if access_error:
+        return access_error
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    source = get_object_or_404(Source, pk=source_id)
+    if source.status in {Source.STATUS_QUEUED, Source.STATUS_PROCESSING}:
+        return JsonResponse({'error': 'Wait for the current ingestion job to finish.'}, status=409)
+
+    try:
+        payload = _json_payload(request)
+        transcript = str(payload.get('transcript') or '').strip()
+        title = str(payload.get('title') or '').strip()
+        if len(transcript) < 80:
+            raise ClaimLabError('Paste at least 80 characters of transcript text.')
+        if len(transcript) > 200_000:
+            raise ClaimLabError('Transcript text must be 200,000 characters or fewer.')
+    except ClaimLabError as error:
+        return JsonResponse({'error': str(error)}, status=400)
+
+    source.metadata = {
+        **(source.metadata or {}),
+        'editorial_transcript': transcript,
+        'editorial_title': title[:500],
+    }
+    source.status = Source.STATUS_QUEUED
+    source.error = ''
+    source.save(update_fields=['metadata', 'status', 'error'])
+    try:
+        process_source.delay(source.id)
+    except Exception as error:
+        source.status = Source.STATUS_FAILED
+        source.error = f'Could not queue transcript ingestion: {error}'
         source.save(update_fields=['status', 'error'])
         return JsonResponse({'error': source.error}, status=503)
     return JsonResponse({'status': 'queued', 'source_id': source.id})

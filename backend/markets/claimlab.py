@@ -72,18 +72,67 @@ def _fetch_json(url, payload=None, headers=None, timeout=30):
         raise ClaimLabError(f'Upstream request failed: {error}') from error
 
 
-def fetch_youtube_document(url):
-    video_id = extract_youtube_id(url)
-    canonical_url = canonical_youtube_url(video_id)
-
+def _fetch_youtube_metadata(canonical_url):
     try:
-        metadata = _fetch_json(
+        return _fetch_json(
             'https://www.youtube.com/oembed?url='
             f'{quote(canonical_url, safe="")}&format=json',
             timeout=15,
         )
     except ClaimLabError:
-        metadata = {}
+        return {}
+
+
+def _editorial_segments(transcript):
+    parts = [
+        re.sub(r'\s+', ' ', part).strip()
+        for part in re.split(r'(?<=[.!?])\s+|\n+', transcript)
+        if part.strip()
+    ]
+    segments = []
+    for part in parts:
+        words = part.split()
+        while words:
+            chunk = []
+            while words and len(' '.join(chunk + [words[0]])) <= 360:
+                chunk.append(words.pop(0))
+            if not chunk:
+                chunk.append(words.pop(0))
+            segments.append({'text': ' '.join(chunk), 'start': None, 'duration': None})
+    return segments
+
+
+def build_editorial_youtube_document(url, transcript, title=''):
+    video_id = extract_youtube_id(url)
+    canonical_url = canonical_youtube_url(video_id)
+    cleaned = re.sub(r'\s+', ' ', (transcript or '')).strip()
+    if len(cleaned) < 80:
+        raise ClaimLabError('Paste at least 80 characters of transcript text.')
+    if len(cleaned) > 200_000:
+        raise ClaimLabError('Transcript text must be 200,000 characters or fewer.')
+
+    metadata = _fetch_youtube_metadata(canonical_url)
+    metadata['transcript_source'] = 'editorial'
+    segments = _editorial_segments(transcript)
+    return {
+        'external_id': video_id,
+        'canonical_url': canonical_url,
+        'title': (title or '').strip()[:500]
+        or metadata.get('title')
+        or f'YouTube video {video_id}',
+        'author': metadata.get('author_name', ''),
+        'metadata': metadata,
+        'language': 'en',
+        'segments': segments,
+        'content': cleaned,
+        'content_hash': hashlib.sha256(cleaned.encode('utf-8')).hexdigest(),
+    }
+
+
+def fetch_youtube_document(url):
+    video_id = extract_youtube_id(url)
+    canonical_url = canonical_youtube_url(video_id)
+    metadata = _fetch_youtube_metadata(canonical_url)
 
     try:
         fetched = YouTubeTranscriptApi().fetch(video_id, languages=['en'])
