@@ -1,8 +1,7 @@
 from decimal import Decimal
-import math
 from django.db import transaction
 from django.contrib.auth.models import User
-from .models import Market, Outcome, Position
+from .models import Market, Outcome, Position, UserProfile
 
 class CPMMService:
     @staticmethod
@@ -56,6 +55,13 @@ class CPMMService:
         return Decimal(other_balance) / Decimal(this_balance + other_balance)
 
     @staticmethod
+    def _price_from_balances(this_balance: Decimal, other_balance: Decimal) -> Decimal:
+        total_balance = this_balance + other_balance
+        if total_balance == 0:
+            return Decimal('0.5')
+        return other_balance / total_balance
+
+    @staticmethod
     @transaction.atomic
     def buy_tokens(user: User, outcome: Outcome, investment_amount: Decimal):
         """
@@ -67,10 +73,29 @@ class CPMMService:
         Result: User gets (Investment + Bought Shares) of the DESIRED outcome.
         Price of Desired Outcome goes UP.
         """
+        if investment_amount <= 0:
+            raise ValueError('Investment amount must be positive.')
+
         market = outcome.market
-        # Get all outcomes (assume binary YES/NO)
-        all_outcomes = list(market.outcomes.all())
-        other_outcome = next(o for o in all_outcomes if o != outcome)
+        if market.status != Market.STATUS_OPEN:
+            raise ValueError('This market is not open for trading.')
+
+        # Lock the account and both pools so concurrent trades cannot overspend
+        # a balance or overwrite each other's market state.
+        profile = UserProfile.objects.select_for_update().get(user=user)
+        if profile.balance < investment_amount:
+            raise ValueError('Insufficient funds.')
+
+        all_outcomes = list(
+            Outcome.objects.select_for_update().filter(market=market).order_by('pk')
+        )
+        if len(all_outcomes) != 2:
+            raise ValueError('Trading currently requires exactly two outcomes.')
+
+        outcome = next((item for item in all_outcomes if item.pk == outcome.pk), None)
+        if outcome is None:
+            raise ValueError('Outcome not found in this market.')
+        other_outcome = next(item for item in all_outcomes if item.pk != outcome.pk)
         
         # 1. State before trade
         R_yes = outcome.pool_balance
@@ -96,9 +121,10 @@ class CPMMService:
         outcome.pool_balance = new_R_yes
         other_outcome.pool_balance = new_R_no
         
-        # Update prices
-        outcome.current_price = CPMMService.get_price(outcome)
-        other_outcome.current_price = CPMMService.get_price(other_outcome)
+        # Update prices from the new in-memory balances. Querying here would
+        # read the pre-trade database values until these rows are saved.
+        outcome.current_price = CPMMService._price_from_balances(new_R_yes, new_R_no)
+        other_outcome.current_price = CPMMService._price_from_balances(new_R_no, new_R_yes)
         
         outcome.save()
         other_outcome.save()
@@ -107,6 +133,9 @@ class CPMMService:
         position, _ = Position.objects.get_or_create(user=user, outcome=outcome)
         position.shares = Decimal(str(position.shares)) + total_shares
         position.save()
+
+        profile.balance -= investment_amount
+        profile.save(update_fields=['balance'])
         
         return {
             'shares_bought': total_shares,

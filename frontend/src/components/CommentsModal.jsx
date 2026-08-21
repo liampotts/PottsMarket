@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 
 export default function CommentsModal({ isOpen, marketTitle, comments, user, onClose, onPostComment }) {
-    if (!isOpen) return null;
-
-    // Move input state inside the modal
     const [text, setText] = useState('');
+
+    if (!isOpen) return null;
 
     const handlePost = () => {
         if (!text.trim()) return;

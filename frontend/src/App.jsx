@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import './App.css'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { AuthProvider } from './context/AuthContext'
+import { useAuth } from './context/auth'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import CreateMarketForm from './components/CreateMarketForm'
@@ -62,7 +63,7 @@ function MainApp() {
     setAlertInfo({ title, message });
   };
 
-  const fetchMarkets = async (silent = false) => {
+  const fetchMarkets = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     setError('')
     try {
@@ -77,11 +78,11 @@ function MainApp() {
     } finally {
       if (!silent) setLoading(false)
     }
-  }
+  }, [apiBase])
 
   useEffect(() => {
     fetchMarkets()
-  }, [])
+  }, [fetchMarkets])
 
   const handleTradeSubmit = async (slug, outcomeId, amount) => {
     const response = await fetch(`${apiBase}/markets/${slug}/trade/`, {
@@ -290,7 +291,8 @@ function MainApp() {
                               <span className="outcome-price">{Number(outcome.price || 0).toFixed(2)}</span>
 
                               {/* Admin Resolve Action (Simulated) */}
-                              {market.status !== 'resolved' && (
+                              {market.status !== 'resolved' && user &&
+                                (market.created_by === user.username || user.is_staff) && (
                                 <button className="text-btn" onClick={() => {
                                   setResolvingMarket({
                                     slug: market.slug,
