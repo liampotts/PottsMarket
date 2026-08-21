@@ -19,6 +19,13 @@ A full-stack prediction markets platform inspired by Polymarket and Kalshi. User
 - **Comments** — Discuss predictions and share insights on any market
 - **User Dashboard** — Track your portfolio, positions, and created markets
 
+### Claim Lab
+- **YouTube ingestion** — Retrieve public transcript segments and source metadata in a background job
+- **Claim extraction** — Generate structured forecasting candidates through an OpenAI-compatible Qwen/vLLM endpoint
+- **Human review gate** — Editors define the exact question, deadline, resolution criteria, and public source
+- **Source-backed markets** — Published cards preserve the original excerpt, resolution contract, and model prior
+- **Invitation-only access** — Staff and members of the configured Claim Lab group can enter the alpha
+
 ### Admin Features
 - **Staff Privileges** — Admins can edit/delete any market
 - **Django Admin** — Full backend management via `/admin/`
@@ -30,7 +37,7 @@ A full-stack prediction markets platform inspired by Polymarket and Kalshi. User
 ```
 ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
 │    Frontend     │   ←→    │     Backend     │   ←→    │    Database     │
-│   React/Vite    │         │     Django      │         │   PostgreSQL    │
+│   React/Vite    │         │ Django + Celery │         │ Postgres/Redis  │
 │   (Vercel)      │         │   (Railway)     │         │   (Railway)     │
 └─────────────────┘         └─────────────────┘         └─────────────────┘
 ```
@@ -41,6 +48,8 @@ A full-stack prediction markets platform inspired by Polymarket and Kalshi. User
 | Frontend | React + Vite | Fast HMR, modern tooling, simple setup |
 | Styling | Vanilla CSS | Maximum control, no framework lock-in |
 | Backend | Django | Batteries-included, excellent ORM, admin panel |
+| Jobs | Celery + Redis | Durable transcript ingestion outside web requests |
+| Extraction | Qwen via vLLM | Structured claim proposals through an OpenAI-compatible API |
 | API | Django Views (no DRF) | Lightweight, direct JSON responses |
 | Database | PostgreSQL | Reliable, scalable, Railway-native |
 | Auth | Django Sessions | Secure, built-in, cross-origin cookies |
@@ -153,6 +162,12 @@ Comment
 UserProfile
 ├── user → User (1:1)
 └── balance
+
+Source → Document → Claim → Market
+                  └→ Evidence
+
+Trade / ForecastSnapshot / ResolutionProposal / ForecasterScore
+└── immutable forecasting and calibration audit data
 ```
 
 ---
@@ -171,6 +186,12 @@ UserProfile
 | GET | `/api/markets/<slug>/ledger/` | Public trading ledger |
 | GET/POST | `/api/markets/<slug>/comments/` | Get/post comments |
 | GET | `/api/portfolio/` | User's positions + stats |
+| GET | `/api/claim-lab/config/` | Feature and invitation state |
+| GET/POST | `/api/claim-lab/sources/` | Editorial source queue |
+| POST | `/api/claim-lab/sources/<id>/retry/` | Retry ingestion |
+| POST | `/api/claim-lab/sources/<id>/claims/` | Create a manual claim |
+| PATCH | `/api/claim-lab/claims/<id>/` | Edit and review a claim |
+| POST | `/api/claim-lab/claims/<id>/publish/` | Publish an approved claim |
 | POST | `/api/auth/login/` | Login |
 | POST | `/api/auth/logout/` | Logout |
 | POST | `/api/auth/signup/` | Register |
@@ -213,6 +234,12 @@ CORS_ALLOWED_ORIGINS=https://your-frontend.vercel.app
 CSRF_TRUSTED_ORIGINS=https://your-backend.railway.app
 DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_PASSWORD=your-password
+REDIS_URL=redis://...
+CLAIM_LAB_ENABLED=True
+CLAIM_LAB_GROUP=claim-lab
+CLAIM_LLM_BASE_URL=https://your-vllm-host/v1
+CLAIM_LLM_API_KEY=optional-provider-key
+CLAIM_LLM_MODEL=Qwen/Qwen3.5-2B
 ```
 
 **Frontend (.env or Vercel):**
@@ -229,7 +256,8 @@ VITE_API_URL=https://your-backend.railway.app/api
 2. Set root directory to `backend/`
 3. Add environment variables
 4. Add PostgreSQL plugin
-5. Deploy triggers automatically on push
+5. Add Redis and a worker service using `backend/railway.worker.json`
+6. Deploy triggers automatically on push
 
 ### Vercel (Frontend)
 1. Connect GitHub repo

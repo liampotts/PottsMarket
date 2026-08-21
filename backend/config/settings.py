@@ -197,3 +197,22 @@ CSRF_TRUSTED_ORIGINS = [
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Claim Lab is invitation-only while ingestion and resolution workflows mature.
+CLAIM_LAB_ENABLED = os.environ.get('CLAIM_LAB_ENABLED', 'False').lower() == 'true'
+CLAIM_LAB_GROUP = os.environ.get('CLAIM_LAB_GROUP', 'claim-lab')
+CLAIM_LLM_BASE_URL = os.environ.get('CLAIM_LLM_BASE_URL', '')
+CLAIM_LLM_API_KEY = os.environ.get('CLAIM_LLM_API_KEY', '')
+CLAIM_LLM_MODEL = os.environ.get('CLAIM_LLM_MODEL', 'Qwen/Qwen3.5-2B')
+
+# Celery uses Redis in production. Tests and explicitly configured local
+# environments can run tasks eagerly without a broker.
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_TASK_ALWAYS_EAGER', 'False').lower() == 'true'
+CELERY_TASK_EAGER_PROPAGATES = True
