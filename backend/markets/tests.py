@@ -1,6 +1,6 @@
 from decimal import Decimal
 import json
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.contrib.auth.models import User
 from .models import Market, Outcome, Position
 from .services import CPMMService
@@ -17,6 +17,7 @@ class MarketTests(TestCase):
         )
         self.client = Client()
 
+    @override_settings(SECURE_SSL_REDIRECT=True)
     def test_health_check(self):
         response = self.client.get('/api/health/')
 

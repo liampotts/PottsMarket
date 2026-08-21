@@ -176,6 +176,9 @@ CSRF_COOKIE_SAMESITE = 'None' if CSRF_COOKIE_SECURE else 'Lax'
 # Railway terminates TLS before forwarding requests to Gunicorn.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', str(not DEBUG)).lower() == 'true'
+# Railway's internal health probe reaches the container over HTTP. Keep that
+# single endpoint probeable while redirecting all user-facing traffic to HTTPS.
+SECURE_REDIRECT_EXEMPT = [r'^api/health/$']
 SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
