@@ -15,8 +15,9 @@ import CommentsModal from './components/CommentsModal'
 import EditMarketModal from './components/EditMarketModal'
 import AlertModal from './components/AlertModal'
 import Dashboard from './pages/Dashboard'
+import ClaimLab from './pages/ClaimLab'
 
-function Navbar({ onOpenAuth, setView }) {
+function Navbar({ onOpenAuth, setView, claimLabAccess }) {
   const { user, logout } = useAuth();
 
   return (
@@ -25,6 +26,9 @@ function Navbar({ onOpenAuth, setView }) {
       <div className="navbar-actions">
         {user ? (
           <>
+            {claimLabAccess && (
+              <button className="text-btn" onClick={() => setView('claim-lab')}>Claim Lab</button>
+            )}
             <button className="text-btn" onClick={() => setView('dashboard')}>Dashboard</button>
             <span className="navbar-balance" style={{ marginRight: '1rem', fontWeight: 'bold' }}>
               ${user.balance !== undefined ? user.balance.toFixed(2) : '...'}
@@ -58,6 +62,7 @@ function MainApp() {
   const [resolvingMarket, setResolvingMarket] = useState(null); // { slug, outcomeId, marketTitle, outcomeName }
   const [publishingMarket, setPublishingMarket] = useState(null); // market object to publish
   const [alertInfo, setAlertInfo] = useState(null); // { title: string, message: string }
+  const [claimLabConfig, setClaimLabConfig] = useState({ enabled: false, can_access: false, model: '', llm_configured: false })
 
   const showAlert = (title, message) => {
     setAlertInfo({ title, message });
@@ -83,6 +88,18 @@ function MainApp() {
   useEffect(() => {
     fetchMarkets()
   }, [fetchMarkets])
+
+  useEffect(() => {
+    const fetchClaimLabConfig = async () => {
+      try {
+        const response = await fetch(`${apiBase}/claim-lab/config/`, { credentials: 'include' })
+        if (response.ok) setClaimLabConfig(await response.json())
+      } catch {
+        setClaimLabConfig({ enabled: false, can_access: false, model: '', llm_configured: false })
+      }
+    }
+    fetchClaimLabConfig()
+  }, [apiBase, user])
 
   const handleTradeSubmit = async (slug, outcomeId, amount) => {
     const response = await fetch(`${apiBase}/markets/${slug}/trade/`, {
@@ -231,18 +248,24 @@ function MainApp() {
 
   return (
     <div className="page">
-      <Navbar onOpenAuth={setAuthModalType} setView={setCurrentView} />
+      <Navbar
+        onOpenAuth={setAuthModalType}
+        setView={setCurrentView}
+        claimLabAccess={claimLabConfig.can_access}
+      />
 
-      <header className="hero">
-        <div className="hero__content">
-          <div className="badge">Prediction markets</div>
-          <h1>PottsMarket</h1>
-          <p>
-            Launch bold questions, trade conviction, and track the pulse of
-            sentiment in real time.
-          </p>
-        </div>
-      </header>
+      {currentView !== 'claim-lab' && (
+        <header className="hero">
+          <div className="hero__content">
+            <div className="badge">Prediction markets</div>
+            <h1>PottsMarket</h1>
+            <p>
+              Launch bold questions, trade conviction, and track the pulse of
+              sentiment in real time.
+            </p>
+          </div>
+        </header>
+      )}
 
       <main className="grid">
         {currentView === 'dashboard' ? (
@@ -251,6 +274,15 @@ function MainApp() {
             // Optionally switch back to feed if we want them to see the list?
             // Or handle edit modal here. Logic below handles edit modal globally if editingMarket is set.
           }} />
+        ) : currentView === 'claim-lab' && claimLabConfig.can_access ? (
+          <ClaimLab
+            apiBase={apiBase}
+            config={claimLabConfig}
+            onMarketPublished={() => {
+              fetchMarkets(true)
+              showAlert('Source-backed market published', 'The reviewed claim is now open for forecasting.')
+            }}
+          />
         ) : (
           <>
             <section className="panel">
@@ -278,10 +310,34 @@ function MainApp() {
                       <div className="market-card__top">
                         <h3>{market.title}</h3>
                         <div className="badges">
+                          {market.source && <span className="pill pill--source">source-backed</span>}
                           <span className={`pill pill--${market.status}`}>{market.status}</span>
                         </div>
                       </div>
                       <p>{market.description || 'No description provided.'}</p>
+
+                      {market.source && (
+                        <div className="market-source">
+                          <div>
+                            <span>Claim extracted from</span>
+                            <a href={market.source.url} target="_blank" rel="noreferrer">
+                              {market.source.title}{market.source.author ? ` · ${market.source.author}` : ''} ↗
+                            </a>
+                          </div>
+                          {market.source.excerpt && <blockquote>{market.source.excerpt}</blockquote>}
+                          <details>
+                            <summary>Resolution contract</summary>
+                            <p>{market.source.resolution_criteria}</p>
+                            <a href={market.source.resolution_source_url} target="_blank" rel="noreferrer">Resolution source ↗</a>
+                          </details>
+                          {market.agent_forecast && (
+                            <div className="agent-prior">
+                              <span>{market.agent_forecast.agent_name} prior</span>
+                              <strong>{Math.round(market.agent_forecast.probability * 100)}%</strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {market.outcomes && market.outcomes.length > 0 && (
                         <div className="outcomes-grid">

@@ -1,9 +1,14 @@
 from decimal import Decimal
+from datetime import timedelta
 import json
+from unittest.mock import patch
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth.models import User
-from .models import Market, Outcome, Position
+from django.utils import timezone
+from .claimlab import ClaimLabError, extract_youtube_id
+from .models import Claim, Document, Market, Outcome, Position, Source, Trade
 from .services import CPMMService
+from .tasks import process_source
 
 class MarketTests(TestCase):
     def setUp(self):
@@ -92,6 +97,9 @@ class MarketTests(TestCase):
 
         self.user.userprofile.refresh_from_db()
         self.assertEqual(self.user.userprofile.balance, Decimal('980.00'))
+        trade = Trade.objects.get(user=self.user, market=self.market)
+        self.assertEqual(trade.amount, Decimal('20.0000'))
+        self.assertGreater(trade.shares, Decimal('20.0000'))
 
     def test_only_owner_or_admin_can_resolve_market(self):
         """Resolution cannot be triggered anonymously or by another user."""
@@ -134,3 +142,178 @@ class MarketTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error'], 'This market is not open for trading.')
+
+
+@override_settings(CLAIM_LAB_ENABLED=True, CLAIM_LAB_GROUP='claim-lab')
+class ClaimLabTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='claim-editor',
+            password='test-password-123',
+            is_staff=True,
+        )
+        self.member = User.objects.create_user(
+            username='ordinary-user',
+            password='test-password-123',
+        )
+        self.client = Client()
+
+    def _create_processed_source(self):
+        source = Source.objects.create(
+            source_type=Source.TYPE_YOUTUBE,
+            url='https://www.youtube.com/watch?v=abcdefghijk',
+            external_id='abcdefghijk',
+            title='A model release forecast',
+            author='Test channel',
+            status=Source.STATUS_READY,
+            created_by=self.staff,
+        )
+        document = Document.objects.create(
+            source=source,
+            content='The team will release the model next year.',
+            language='en',
+            content_hash='a' * 64,
+            segments=[{'text': 'The team will release the model next year.', 'start': 12}],
+        )
+        now = timezone.now()
+        claim = Claim.objects.create(
+            document=document,
+            statement='Will the team release the model before next year ends?',
+            excerpt='The team will release the model next year.',
+            excerpt_start_seconds=12,
+            rationale='A concrete release prediction.',
+            resolution_criteria='Resolve YES if the official release is publicly available before the deadline; otherwise NO.',
+            resolution_source_url='https://example.com/releases',
+            closes_at=now + timedelta(days=14),
+            resolves_at=now + timedelta(days=90),
+            confidence=Decimal('0.900'),
+            extraction_method='llm:test-model',
+        )
+        return source, claim
+
+    def test_youtube_url_parser_accepts_common_urls(self):
+        self.assertEqual(
+            extract_youtube_id('https://www.youtube.com/watch?v=abcdefghijk'),
+            'abcdefghijk',
+        )
+        self.assertEqual(
+            extract_youtube_id('https://youtu.be/abcdefghijk?t=10'),
+            'abcdefghijk',
+        )
+        with self.assertRaises(ClaimLabError):
+            extract_youtube_id('https://example.com/watch?v=abcdefghijk')
+
+    def test_claim_lab_requires_an_invitation(self):
+        self.client.force_login(self.member)
+        response = self.client.get('/api/claim-lab/sources/')
+        self.assertEqual(response.status_code, 403)
+
+        config = self.client.get('/api/claim-lab/config/').json()
+        self.assertTrue(config['enabled'])
+        self.assertFalse(config['can_access'])
+
+    @patch('markets.claimlab_views.process_source.delay')
+    def test_staff_can_submit_a_source_for_background_processing(self, delay):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            '/api/claim-lab/sources/',
+            data=json.dumps({'url': 'https://youtu.be/abcdefghijk?t=10'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        source = Source.objects.get()
+        self.assertEqual(source.url, 'https://www.youtube.com/watch?v=abcdefghijk')
+        self.assertEqual(response.json()['status'], Source.STATUS_QUEUED)
+        delay.assert_called_once_with(source.id)
+
+    @patch('markets.tasks.extract_claim_candidates')
+    @patch('markets.tasks.fetch_youtube_document')
+    def test_worker_persists_transcript_and_claims(self, fetch_document, extract_claims):
+        source = Source.objects.create(
+            source_type=Source.TYPE_YOUTUBE,
+            url='https://www.youtube.com/watch?v=abcdefghijk',
+            external_id='abcdefghijk',
+            created_by=self.staff,
+        )
+        fetch_document.return_value = {
+            'external_id': 'abcdefghijk',
+            'canonical_url': source.url,
+            'title': 'The next model release',
+            'author': 'Test channel',
+            'metadata': {'provider_name': 'YouTube'},
+            'language': 'en',
+            'segments': [{'text': 'A new model will launch next year.', 'start': 4}],
+            'content': 'A new model will launch next year.',
+            'content_hash': 'b' * 64,
+        }
+        now = timezone.now()
+        extract_claims.return_value = ([{
+            'statement': 'Will a new model launch before next year ends?',
+            'excerpt': 'A new model will launch next year.',
+            'excerpt_start_seconds': 4,
+            'rationale': 'This is a dated launch prediction.',
+            'resolution_criteria': 'Resolve YES if the official model is publicly released before the deadline; otherwise NO.',
+            'resolution_source_url': 'https://example.com/releases',
+            'closes_at': now + timedelta(days=14),
+            'resolves_at': now + timedelta(days=90),
+            'confidence': 0.85,
+            'extraction_method': 'llm:test-model',
+        }], '')
+
+        result = process_source(source.id)
+
+        source.refresh_from_db()
+        self.assertEqual(result['status'], Source.STATUS_READY)
+        self.assertEqual(source.title, 'The next model release')
+        self.assertEqual(source.document.claims.count(), 1)
+
+    def test_approved_claim_publishes_an_auditable_market(self):
+        source, claim = self._create_processed_source()
+        self.client.force_login(self.staff)
+
+        review = self.client.patch(
+            f'/api/claim-lab/claims/{claim.id}/',
+            data=json.dumps({'status': Claim.STATUS_APPROVED}),
+            content_type='application/json',
+        )
+        self.assertEqual(review.status_code, 200)
+        self.assertEqual(review.json()['status'], Claim.STATUS_APPROVED)
+
+        publish = self.client.post(f'/api/claim-lab/claims/{claim.id}/publish/')
+        self.assertEqual(publish.status_code, 201)
+
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, Claim.STATUS_PUBLISHED)
+        self.assertEqual(claim.market.status, Market.STATUS_OPEN)
+        self.assertEqual(claim.market.outcomes.count(), 2)
+        self.assertEqual(claim.market.forecasts.count(), 1)
+        self.assertEqual(claim.evidence.count(), 1)
+
+        feed = self.client.get('/api/markets/').json()
+        published = next(item for item in feed if item['id'] == claim.market_id)
+        self.assertEqual(published['source']['url'], source.url)
+        self.assertIn('official release', published['source']['resolution_criteria'])
+
+    def test_manual_claim_creation_supports_transcripts_with_no_candidates(self):
+        source, _ = self._create_processed_source()
+        source.document.claims.all().delete()
+        self.client.force_login(self.staff)
+        now = timezone.now()
+
+        response = self.client.post(
+            f'/api/claim-lab/sources/{source.id}/claims/',
+            data=json.dumps({
+                'statement': 'Will the project publish a stable release this quarter?',
+                'excerpt': 'We plan to publish this quarter.',
+                'resolution_criteria': 'Resolve YES if the stable release appears on the official releases page by the deadline; otherwise NO.',
+                'resolution_source_url': 'https://example.com/releases',
+                'closes_at': (now + timedelta(days=7)).isoformat(),
+                'resolves_at': (now + timedelta(days=60)).isoformat(),
+                'confidence': 1,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['extraction_method'], 'manual')

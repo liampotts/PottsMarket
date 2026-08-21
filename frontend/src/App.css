@@ -212,6 +212,67 @@
   color: #6a6a6a;
 }
 
+.pill--source {
+  color: #315b67;
+  background: #dff1f2;
+}
+
+.badges {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.market-source {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border: 1px solid #d8e7e9;
+  border-radius: 13px;
+  background: #f5faf9;
+}
+
+.market-source > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.market-source span,
+.market-source summary {
+  color: #547079;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.market-source a {
+  color: #245f6b;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.market-source blockquote {
+  margin: 0;
+  padding-left: 0.8rem;
+  border-left: 3px solid #9fc6c8;
+  color: #455b62;
+  font-size: 0.88rem;
+}
+
+.market-source details p {
+  margin: 0.55rem 0;
+  font-size: 0.86rem;
+}
+
+.agent-prior {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.55rem;
+  border-top: 1px solid #d8e7e9;
+}
+
 .status {
   padding: 1rem;
   border-radius: 14px;

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.db import transaction
 from django.contrib.auth.models import User
-from .models import Market, Outcome, Position, UserProfile
+from .models import Market, Outcome, Position, Trade, UserProfile
 
 class CPMMService:
     @staticmethod
@@ -100,6 +100,7 @@ class CPMMService:
         # 1. State before trade
         R_yes = outcome.pool_balance
         R_no = other_outcome.pool_balance
+        price_before = outcome.current_price
         k = R_yes * R_no
         
         # 2. Add investment to pool (conceptually user splits investment -> YES + NO)
@@ -136,6 +137,16 @@ class CPMMService:
 
         profile.balance -= investment_amount
         profile.save(update_fields=['balance'])
+
+        Trade.objects.create(
+            user=user,
+            market=market,
+            outcome=outcome,
+            amount=investment_amount,
+            shares=total_shares,
+            price_before=price_before,
+            price_after=outcome.current_price,
+        )
         
         return {
             'shares_bought': total_shares,

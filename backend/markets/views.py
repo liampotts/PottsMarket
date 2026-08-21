@@ -10,6 +10,57 @@ from .models import Market, Outcome, Position, Comment
 from .services import CPMMService
 
 
+def serialize_market(market):
+    source_claim = getattr(market, 'source_claim', None)
+    source_payload = None
+    if source_claim:
+        source = source_claim.document.source
+        source_payload = {
+            'title': source.title,
+            'author': source.author,
+            'url': source.url,
+            'excerpt': source_claim.excerpt,
+            'excerpt_start_seconds': source_claim.excerpt_start_seconds,
+            'resolution_criteria': source_claim.resolution_criteria,
+            'resolution_source_url': source_claim.resolution_source_url,
+            'closes_at': source_claim.closes_at.isoformat(),
+            'resolves_at': source_claim.resolves_at.isoformat(),
+            'extraction_method': source_claim.extraction_method,
+        }
+
+    latest_agent_forecast = None
+    forecasts = list(market.forecasts.all()) if hasattr(market, 'forecasts') else []
+    if forecasts:
+        forecast = forecasts[0]
+        latest_agent_forecast = {
+            'agent_name': forecast.agent_name,
+            'probability': float(forecast.probability),
+            'rationale': forecast.rationale,
+            'created_at': forecast.created_at.isoformat(),
+        }
+
+    return {
+        'id': market.id,
+        'title': market.title,
+        'slug': market.slug,
+        'description': market.description,
+        'status': market.status,
+        'created_at': market.created_at.isoformat(),
+        'created_by': market.created_by.username if market.created_by else None,
+        'outcomes': [
+            {
+                'id': outcome.id,
+                'name': outcome.name,
+                'price': outcome.current_price,
+                'pool': outcome.pool_balance,
+            }
+            for outcome in market.outcomes.all()
+        ],
+        'source': source_payload,
+        'agent_forecast': latest_agent_forecast,
+    }
+
+
 def health_check(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
@@ -65,57 +116,29 @@ def market_list(request):
         # Auto-initialize 50/50 outcomes
         CPMMService.initialize_market(market)
 
-        response_payload = {
-            'id': market.id,
-            'title': market.title,
-            'slug': market.slug,
-            'description': market.description,
-            'status': market.status,
-            'created_at': market.created_at.isoformat(),
-            'created_by': market.created_by.username if market.created_by else None,
-            'outcomes': [
-                {
-                    'id': o.id,
-                    'name': o.name,
-                    'price': o.current_price,
-                    'pool': o.pool_balance,
-                }
-                for o in market.outcomes.all()
-            ]
-        }
+        response_payload = serialize_market(market)
         return JsonResponse(response_payload, status=201)
 
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
 
-    markets = Market.objects.all()
-    payload = [
-        {
-            'id': market.id,
-            'title': market.title,
-            'slug': market.slug,
-            'description': market.description,
-            'status': market.status,
-            'created_at': market.created_at.isoformat(),
-            'created_by': market.created_by.username if market.created_by else None,
-            'outcomes': [
-                {
-                    'id': o.id,
-                    'name': o.name,
-                    'price': o.current_price,
-                    'pool': o.pool_balance,
-                }
-                for o in market.outcomes.all()
-            ]
-        }
-        for market in markets
-    ]
+    markets = Market.objects.select_related(
+        'created_by',
+        'source_claim__document__source',
+    ).prefetch_related('outcomes', 'forecasts')
+    payload = [serialize_market(market) for market in markets]
     return JsonResponse(payload, safe=False)
 
 
 @csrf_exempt
 def market_detail(request, slug):
-    market = get_object_or_404(Market, slug=slug)
+    market = get_object_or_404(
+        Market.objects.select_related(
+            'created_by',
+            'source_claim__document__source',
+        ).prefetch_related('outcomes', 'forecasts'),
+        slug=slug,
+    )
 
     if request.method in ['PUT', 'PATCH']:
         if not request.user.is_authenticated:
@@ -149,24 +172,7 @@ def market_detail(request, slug):
     if request.method not in ['GET', 'PUT', 'PATCH']:
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
 
-    payload = {
-        'id': market.id,
-        'title': market.title,
-        'slug': market.slug,
-        'description': market.description,
-        'status': market.status,
-        'created_at': market.created_at.isoformat(),
-        'created_by': market.created_by.username if market.created_by else None,
-        'outcomes': [
-            {
-                'id': o.id,
-                'name': o.name,
-                'price': o.current_price,
-                'pool': o.pool_balance,
-            }
-            for o in market.outcomes.all()
-        ]
-    }
+    payload = serialize_market(market)
     return JsonResponse(payload)
 
 
@@ -394,10 +400,26 @@ def market_ledger(request, slug):
             'shares': float(pos.shares),
             'value': float(pos.shares * pos.outcome.current_price),
         })
+
+    trades = market.trades.select_related('user', 'outcome').all()[:100]
+    trade_history = [
+        {
+            'id': trade.id,
+            'username': trade.user.username,
+            'outcome': trade.outcome.name,
+            'amount': float(trade.amount),
+            'shares': float(trade.shares),
+            'price_before': float(trade.price_before),
+            'price_after': float(trade.price_after),
+            'created_at': trade.created_at.isoformat(),
+        }
+        for trade in trades
+    ]
     
     return JsonResponse({
         'market': market.title,
         'ledger': ledger,
+        'trades': trade_history,
         'total_bettors': len(set(pos.user_id for pos in positions)),
     })
 

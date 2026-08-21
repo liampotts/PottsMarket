@@ -9,3 +9,6 @@ django-cors-headers==4.3.1
 python-dotenv==1.0.0
 djangorestframework==3.16.1
 dj-database-url==2.1.0
+celery[redis]==5.5.3
+redis==5.2.1
+youtube-transcript-api==1.2.4
