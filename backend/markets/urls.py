@@ -21,6 +21,7 @@ urlpatterns = [
     path('claim-lab/sources/', claimlab_views.source_list, name='claim_lab_sources'),
     path('claim-lab/sources/<int:source_id>/', claimlab_views.source_detail, name='claim_lab_source'),
     path('claim-lab/sources/<int:source_id>/retry/', claimlab_views.source_retry, name='claim_lab_retry'),
+    path('claim-lab/sources/<int:source_id>/transcript/', claimlab_views.source_transcript, name='claim_lab_transcript'),
     path('claim-lab/sources/<int:source_id>/claims/', claimlab_views.source_claims, name='claim_lab_source_claims'),
     path('claim-lab/claims/<int:claim_id>/', claimlab_views.claim_detail, name='claim_lab_claim'),
     path('claim-lab/claims/<int:claim_id>/publish/', claimlab_views.claim_publish, name='claim_lab_publish'),

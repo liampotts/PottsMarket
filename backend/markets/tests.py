@@ -227,6 +227,38 @@ class ClaimLabTests(TestCase):
         self.assertEqual(response.json()['status'], Source.STATUS_QUEUED)
         delay.assert_called_once_with(source.id)
 
+    @patch('markets.claimlab_views.process_source.delay')
+    def test_staff_can_supply_a_transcript_after_automated_fetch_fails(self, delay):
+        source = Source.objects.create(
+            source_type=Source.TYPE_YOUTUBE,
+            url='https://www.youtube.com/watch?v=abcdefghijk',
+            external_id='abcdefghijk',
+            status=Source.STATUS_FAILED,
+            error='YouTube blocked transcript discovery.',
+            created_by=self.staff,
+        )
+        transcript = (
+            'The team expects to release a public model next year. '
+            'The launch will be documented on the official releases page. '
+            'This editorial transcript is long enough for ingestion.'
+        )
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            f'/api/claim-lab/sources/{source.id}/transcript/',
+            data=json.dumps({'title': 'Editorial source', 'transcript': transcript}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        source.refresh_from_db()
+        self.assertEqual(source.status, Source.STATUS_QUEUED)
+        self.assertEqual(source.metadata['editorial_transcript'], transcript)
+        delay.assert_called_once_with(source.id)
+
+        detail = self.client.get(f'/api/claim-lab/sources/{source.id}/').json()
+        self.assertNotIn('editorial_transcript', detail['metadata'])
+
     @patch('markets.tasks.extract_claim_candidates')
     @patch('markets.tasks.fetch_youtube_document')
     def test_worker_persists_transcript_and_claims(self, fetch_document, extract_claims):
@@ -267,6 +299,48 @@ class ClaimLabTests(TestCase):
         self.assertEqual(result['status'], Source.STATUS_READY)
         self.assertEqual(source.title, 'The next model release')
         self.assertEqual(source.document.claims.count(), 1)
+
+    @patch('markets.tasks.extract_claim_candidates')
+    @patch('markets.tasks.build_editorial_youtube_document')
+    @patch('markets.tasks.fetch_youtube_document')
+    def test_worker_uses_supplied_transcript_when_present(
+        self,
+        fetch_document,
+        build_editorial_document,
+        extract_claims,
+    ):
+        transcript = (
+            'The team expects to release a public model next year. '
+            'The launch will be documented on the official releases page.'
+        )
+        source = Source.objects.create(
+            source_type=Source.TYPE_YOUTUBE,
+            url='https://www.youtube.com/watch?v=abcdefghijk',
+            external_id='abcdefghijk',
+            created_by=self.staff,
+            metadata={'editorial_transcript': transcript, 'editorial_title': 'Release forecast'},
+        )
+        build_editorial_document.return_value = {
+            'external_id': 'abcdefghijk',
+            'canonical_url': source.url,
+            'title': 'Release forecast',
+            'author': 'Editorial channel',
+            'metadata': {'transcript_source': 'editorial'},
+            'language': 'en',
+            'segments': [{'text': transcript, 'start': None}],
+            'content': transcript,
+            'content_hash': 'c' * 64,
+        }
+        extract_claims.return_value = ([], '')
+
+        result = process_source(source.id)
+
+        source.refresh_from_db()
+        self.assertEqual(result['status'], Source.STATUS_NEEDS_REVIEW)
+        self.assertEqual(source.document.content, transcript)
+        self.assertEqual(source.metadata['transcript_source'], 'editorial')
+        self.assertNotIn('editorial_transcript', source.metadata)
+        fetch_document.assert_not_called()
 
     def test_approved_claim_publishes_an_auditable_market(self):
         source, claim = self._create_processed_source()

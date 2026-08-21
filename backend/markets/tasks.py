@@ -2,7 +2,12 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
-from .claimlab import ClaimLabError, extract_claim_candidates, fetch_youtube_document
+from .claimlab import (
+    ClaimLabError,
+    build_editorial_youtube_document,
+    extract_claim_candidates,
+    fetch_youtube_document,
+)
 from .models import Claim, Document, Source
 
 
@@ -14,7 +19,16 @@ def process_source(self, source_id):
     source.save(update_fields=['status', 'error'])
 
     try:
-        fetched = fetch_youtube_document(source.url)
+        source_metadata = source.metadata or {}
+        editorial_transcript = str(source_metadata.get('editorial_transcript') or '').strip()
+        if editorial_transcript:
+            fetched = build_editorial_youtube_document(
+                source.url,
+                editorial_transcript,
+                source_metadata.get('editorial_title', ''),
+            )
+        else:
+            fetched = fetch_youtube_document(source.url)
         candidates, llm_error = extract_claim_candidates(
             fetched['title'],
             fetched['canonical_url'],

@@ -14,6 +14,8 @@ open market.
 
 1. An invited editor submits a public YouTube URL.
 2. A background worker retrieves metadata and an available English transcript.
+   If YouTube blocks the hosting region, the editor can paste the public
+   transcript and send it through the same worker and audit trail.
 3. An OpenAI-compatible Qwen endpoint extracts up to five falsifiable claims.
 4. When no endpoint is configured, a conservative heuristic suggests only clear
    future-facing language; editors can always create a claim manually.
@@ -65,12 +67,26 @@ evidence retrieval justify their operational cost.
 
 ## Rollout gates
 
-1. Backend tests cover access, ingestion persistence, manual fallback, approval,
-   publication, provenance and immutable trade creation.
-2. Frontend lint/build and a browser walkthrough cover the complete journey.
+1. Backend tests cover access, ingestion persistence, transcript recovery,
+   manual claims, approval, publication, provenance and immutable trade creation.
+2. Frontend lint/build and browser walkthroughs cover the complete journey and
+   the datacenter-caption failure state.
 3. Railway runs separate web, PostgreSQL, Redis and Celery worker services.
 4. Vercel and Railway deploy the same merged commit successfully.
-5. Production health, feature access and a non-destructive queue smoke test pass.
+5. Production health, feature access and a temporary queue smoke test pass; the
+   smoke record is removed after verification.
+
+## Production operating notes
+
+- Railway's worker is connected to the private Redis broker and registers
+  `markets.tasks.process_source` at startup.
+- Automated YouTube transcripts remain the preferred route. Hosting-provider IP
+  blocks are treated as an expected recoverable state, not a silent failure.
+- A supplied transcript is capped at 200,000 characters, hidden from source API
+  serialization while queued, normalized into reviewable segments, and replaced
+  by its content hash and provider metadata after processing.
+- Until a Qwen/vLLM endpoint is configured, the UI says “Editorial fallback
+  active” and uses conservative heuristics plus manual editorial claims.
 
 ## Alpha measurements
 

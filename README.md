@@ -21,6 +21,7 @@ A full-stack prediction markets platform inspired by Polymarket and Kalshi. User
 
 ### Claim Lab
 - **YouTube ingestion** — Retrieve public transcript segments and source metadata in a background job
+- **Transcript recovery** — Paste an editorial transcript when YouTube blocks automated caption access from the hosting region
 - **Claim extraction** — Generate structured forecasting candidates through an OpenAI-compatible Qwen/vLLM endpoint
 - **Human review gate** — Editors define the exact question, deadline, resolution criteria, and public source
 - **Source-backed markets** — Published cards preserve the original excerpt, resolution contract, and model prior
@@ -53,7 +54,7 @@ A full-stack prediction markets platform inspired by Polymarket and Kalshi. User
 | API | Django Views (no DRF) | Lightweight, direct JSON responses |
 | Database | PostgreSQL | Reliable, scalable, Railway-native |
 | Auth | Django Sessions | Secure, built-in, cross-origin cookies |
-| Hosting | Vercel + Railway | Free tier, easy CI/CD, separate scaling |
+| Hosting | Vercel + Railway | Managed CI/CD with separate web, worker, Redis, and PostgreSQL scaling |
 
 ---
 
@@ -189,6 +190,7 @@ Trade / ForecastSnapshot / ResolutionProposal / ForecasterScore
 | GET | `/api/claim-lab/config/` | Feature and invitation state |
 | GET/POST | `/api/claim-lab/sources/` | Editorial source queue |
 | POST | `/api/claim-lab/sources/<id>/retry/` | Retry ingestion |
+| POST | `/api/claim-lab/sources/<id>/transcript/` | Process a pasted editorial transcript |
 | POST | `/api/claim-lab/sources/<id>/claims/` | Create a manual claim |
 | PATCH | `/api/claim-lab/claims/<id>/` | Edit and review a claim |
 | POST | `/api/claim-lab/claims/<id>/publish/` | Publish an approved claim |
@@ -258,6 +260,11 @@ VITE_API_URL=https://your-backend.railway.app/api
 4. Add PostgreSQL plugin
 5. Add Redis and a worker service using `backend/railway.worker.json`
 6. Deploy triggers automatically on push
+
+YouTube may deny automated transcript discovery from datacenter IPs. Claim Lab
+surfaces that failure to invited editors and provides a **Paste transcript**
+recovery flow. The supplied text is normalized, hashed, processed by the same
+Celery pipeline, and then removed from the source's temporary queue metadata.
 
 ### Vercel (Frontend)
 1. Connect GitHub repo
